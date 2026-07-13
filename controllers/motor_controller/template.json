@@ -35,10 +35,9 @@
       "requiresInstance": true,
       "type": "entity",
       "required": true,
-      "description": "Joint this controller drives in open-loop speed/duty mode. Resolves to a joint IO on a Part added to the robot. Serialized to hardware.json at deploy.",
+      "description": "Joint this controller drives in open-loop speed/duty mode. Resolves to a joint on the robot. Serialized to hardware.json at deploy.",
       "entity_source": {
-        "selector": "components.io",
-        "filters": { "direction": "output", "type": "joint" },
+        "selector": "joints",
         "value_field": "_id",
         "label_field": "name"
       },
