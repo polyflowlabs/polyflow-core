@@ -23,10 +23,7 @@ class DifferentialDriveNode(PolyflowNode):
         self.register_output_pin("back_right_motor", Float64)
 
         self.get_logger().info(
-            f"DifferentialDrive | wheel_radius={self.kernel.wheel_radius} | "
-            f"wheel_separation={self.kernel.wheel_separation} | "
-            f"max_wheel_speed={self.kernel.max_wheel_speed} | "
-            f"teleop_timeout_s={self.kernel.teleop_timeout_s}"
+            f"DifferentialDrive | teleop_timeout_s={self.kernel.teleop_timeout_s}"
         )
 
     async def run_async(self):
