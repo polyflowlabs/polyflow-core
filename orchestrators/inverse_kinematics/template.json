@@ -38,52 +38,106 @@
   "services": [],
   "actions": [],
   "parameters_schema": {
-    "root_component_id": {
-      "label": "Root Component",
+    "root_part_id": {
+      "label": "Root Part",
       "requiresInstance": true,
       "type": "entity",
-      "required": true,
-      "description": "The root (base) component of the kinematic chain. The solver walks downward from here toward the end-effector.",
+      "required": false,
+      "description": "Parts-built robot: a part on the chain's base body (usually the base part). The solver walks from its body to the end-effector part's body, and targets are expressed in this part's frame.",
+      "entity_source": {
+        "selector": "parts",
+        "value_field": "_id",
+        "label_field": "name"
+      },
+      "ui": {
+        "group": "Chain",
+        "order": 1
+      }
+    },
+    "end_effector_part_id": {
+      "label": "End Effector Part",
+      "requiresInstance": true,
+      "type": "entity",
+      "required": false,
+      "description": "Parts-built robot: the part whose frame is the tool point (a gripper palm, a foot). Any part welded to the tip body works; its own frame is what reaches the target.",
+      "entity_source": {
+        "selector": "parts",
+        "value_field": "_id",
+        "label_field": "name"
+      },
+      "ui": {
+        "group": "Chain",
+        "order": 2
+      }
+    },
+    "root_component_id": {
+      "label": "Root Component (legacy)",
+      "requiresInstance": true,
+      "type": "entity",
+      "required": false,
+      "description": "The root (base) component of the kinematic chain. The solver walks downward from here toward the end-effector. Component-built robots only; a parts-built robot uses Root Part.",
       "entity_source": {
         "selector": "components",
         "value_field": "_id",
         "label_field": "name"
       },
-      "ui": { "group": "Chain", "order": 1 }
+      "ui": {
+        "group": "Chain",
+        "order": 3
+      }
     },
     "end_effector_component_id": {
-      "label": "End Effector",
+      "label": "End Effector (legacy)",
       "requiresInstance": true,
       "type": "entity",
-      "required": true,
-      "description": "The tip component of the kinematic chain (e.g. hand, gripper). The solver builds a path from root to this component.",
+      "required": false,
+      "description": "The tip component of the kinematic chain (e.g. hand, gripper). The solver builds a path from root to this component. Component-built robots only; a parts-built robot uses End Effector Part.",
       "entity_source": {
         "selector": "components",
         "value_field": "_id",
         "label_field": "name"
       },
-      "ui": { "group": "Chain", "order": 2 }
+      "ui": {
+        "group": "Chain",
+        "order": 4
+      }
     },
     "components": {
       "label": "Robot Components",
       "type": "RobotComponent[]",
       "default": [],
       "description": "Auto-injected from Robot.components on deployment.",
-      "ui": { "hidden": true }
+      "ui": {
+        "hidden": true
+      }
     },
     "joints": {
       "label": "Robot Joints",
       "type": "Joint[]",
       "default": [],
       "description": "Auto-injected from Robot.joints on deployment.",
-      "ui": { "hidden": true }
+      "ui": {
+        "hidden": true
+      }
+    },
+    "flat_articulation": {
+      "label": "Robot Bodies",
+      "type": "FlatArticulation",
+      "default": {},
+      "description": "Auto-injected for a parts-built robot: its rigid bodies and the DOF joints between them (the physics worker's own articulation).",
+      "ui": {
+        "hidden": true
+      }
     },
     "max_iterations": {
       "label": "Max Solver Iterations",
       "type": "number",
       "default": 100,
       "description": "Maximum number of iterations for the IK solver.",
-      "ui": { "group": "Solver", "order": 1 }
+      "ui": {
+        "group": "Solver",
+        "order": 1
+      }
     },
     "tolerance": {
       "label": "Position Tolerance",
@@ -91,14 +145,20 @@
       "units": "m",
       "default": 0.001,
       "description": "Target position tolerance in meters.",
-      "ui": { "group": "Solver", "order": 2 }
+      "ui": {
+        "group": "Solver",
+        "order": 2
+      }
     },
     "damping": {
       "label": "Damping Factor",
       "type": "number",
       "default": 0.01,
       "description": "Damping factor (λ) for the damped least-squares solver. Higher values improve stability near singularities.",
-      "ui": { "group": "Solver", "order": 3 }
+      "ui": {
+        "group": "Solver",
+        "order": 3
+      }
     }
   },
   "defaults": {

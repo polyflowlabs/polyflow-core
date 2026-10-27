@@ -45,6 +45,23 @@ def _homogeneous(R: np.ndarray, t: np.ndarray) -> np.ndarray:
     return T
 
 
+def _pose_to_matrix(pose: Optional[Dict[str, Any]]) -> np.ndarray:
+    """A serialized pose {pos: {x,y,z}, rot: {x,y,z,w}} (metres, unit quaternion) → 4x4."""
+    if not pose:
+        return np.eye(4)
+    p = pose.get("pos") or {}
+    q = pose.get("rot") or {}
+    x, y, z, w = (float(q.get(k, d)) for k, d in (("x", 0.0), ("y", 0.0), ("z", 0.0), ("w", 1.0)))
+    n = math.sqrt(x * x + y * y + z * z + w * w) or 1.0
+    x, y, z, w = x / n, y / n, z / n, w / n
+    R = np.array([
+        [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+        [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+        [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+    ])
+    return _homogeneous(R, np.array([float(p.get("x", 0.0)), float(p.get("y", 0.0)), float(p.get("z", 0.0))]))
+
+
 class InverseKinematicsKernel(PolyflowKernel):
     """
     IK solver using scipy.optimize.least_squares with PhysX-matching FK.
@@ -55,7 +72,18 @@ class InverseKinematicsKernel(PolyflowKernel):
     Uses scipy's Levenberg-Marquardt/trust-region optimizer with joint-space
     regularization to find smooth, stable solutions.
 
+    Two kinds of robot:
+      - parts-built (every robot since parts-first): Studio injects `flat_articulation` — the rigid
+        bodies ("links", each a set of welded part placements) and the DOF joints between them, each
+        joint's frame already in its parent and child link (the physics worker's own input). The
+        chain runs between the bodies holding `root_part_id` and `end_effector_part_id` (any part
+        placement on each body; the older component params are accepted too, holding a part id),
+        and the tool point is the end-effector PART's frame. Commands are keyed by the robot joint
+        `_id`, which is what a Joint Controller on such a robot is bound to.
+      - component-built (legacy): the chain runs between components, from `components` + `joints`.
+
     Parameters:
+        root_part_id, end_effector_part_id, flat_articulation,
         root_component_id, end_effector_component_id, components, joints,
         max_iterations, tolerance, regularization
     """
@@ -63,13 +91,21 @@ class InverseKinematicsKernel(PolyflowKernel):
     def setup(self):
         self.root_component_id: str = self.get_param("root_component_id", "")
         self.end_effector_component_id: str = self.get_param("end_effector_component_id", "")
+        self.root_part_id: str = self.get_param("root_part_id", "") or self.root_component_id
+        self.end_effector_part_id: str = self.get_param("end_effector_part_id", "") or self.end_effector_component_id
         self.components: List[Dict[str, Any]] = self.get_param("components", [])
         self.joints: List[Dict[str, Any]] = self.get_param("joints", [])
+        self.flat: Dict[str, Any] = self.get_param("flat_articulation", {}) or {}
         self.max_iterations = int(self.get_param("max_iterations", 100))
         self.tolerance = float(self.get_param("tolerance", 0.001))
         self._regularization = float(self.get_param("regularization", 0.001))
 
-        self._chain = self._build_chain()
+        # Where the tool point and the target frame sit in their bodies: identity on the component path
+        # (a component's frame is its body's), a part's pose-in-link on the flat path.
+        self._T_root_part_inv = np.eye(4)
+        self._T_ee_part = np.eye(4)
+        self._flat = bool(self.flat.get("links"))
+        self._chain = self._build_flat_chain() if self._flat else self._build_chain()
         self._num_joints = len(self._chain)
         self._current_joint_positions: Optional[List[float]] = None
 
@@ -89,7 +125,8 @@ class InverseKinematicsKernel(PolyflowKernel):
                 self._joint_name_to_idx[joint["_id"]] = i
             self._joint_name_to_idx[joint["name"]] = i
 
-        self.log(f"IK chain: {self._num_joints} joints from '{self.root_component_id}' to '{self.end_effector_component_id}'")
+        root, ee = (self.root_part_id, self.end_effector_part_id) if self._flat else (self.root_component_id, self.end_effector_component_id)
+        self.log(f"IK chain ({'parts' if self._flat else 'components'}): {self._num_joints} joints from '{root}' to '{ee}'")
         for i, j in enumerate(self._chain):
             self.log(f"  [{i}] {j['name']} type={j['type']} axis={j['axis'].tolist()}")
 
@@ -100,6 +137,83 @@ class InverseKinematicsKernel(PolyflowKernel):
         for i, T in enumerate(fk0):
             p = T[:3, 3]
             self.log(f"  body[{i}] pos=({p[0]:.6f}, {p[1]:.6f}, {p[2]:.6f})")
+
+    def _build_flat_chain(self) -> List[Dict[str, Any]]:
+        """The chain between the bodies holding the root and end-effector parts, from the flat articulation.
+
+        A body is found by any of its member part placements (or its own id, the root part's). Each DOF
+        joint's parentPose / childPose are already the joint frame in its parent / child link with X the
+        twist axis — exactly what _forward_kinematics composes, so nothing is reconstructed here."""
+        links = self.flat.get("links") or []
+        joints = self.flat.get("joints") or []
+        link_of: Dict[str, str] = {}
+        pose_in_link: Dict[str, Dict[str, Any]] = {}
+        for link in links:
+            lid = str(link.get("id", ""))
+            link_of[lid] = lid
+            for m in link.get("members") or []:
+                pid = str(m.get("partInstanceId", ""))
+                link_of[pid] = lid
+                pose_in_link[pid] = m.get("poseInLink") or {}
+
+        root_link = link_of.get(self.root_part_id)
+        ee_link = link_of.get(self.end_effector_part_id)
+        if not root_link:
+            self.log(f"Root part '{self.root_part_id}' is not on this robot")
+            return []
+        if not ee_link:
+            self.log(f"End-effector part '{self.end_effector_part_id}' is not on this robot")
+            return []
+        self._T_root_part_inv = np.linalg.inv(_pose_to_matrix(pose_in_link.get(self.root_part_id)))
+        self._T_ee_part = _pose_to_matrix(pose_in_link.get(self.end_effector_part_id))
+
+        by_parent: Dict[str, List[Dict[str, Any]]] = {}
+        for j in joints:
+            by_parent.setdefault(str(j.get("parentLink", "")), []).append(j)
+        queue: deque = deque([(root_link, [])])
+        visited = {root_link}
+        path_joints = None
+        while queue:
+            lid, path = queue.popleft()
+            if lid == ee_link:
+                path_joints = path
+                break
+            for j in by_parent.get(lid, []):
+                child = str(j.get("childLink", ""))
+                if child and child not in visited:
+                    visited.add(child)
+                    queue.append((child, path + [j]))
+        if path_joints is None:
+            self.log("No path from the root part's body to the end-effector part's body (is the end effector downstream of the root?)")
+            return []
+
+        chain = []
+        for j in path_joints:
+            joint_type = str(j.get("jointType", "fixed")).lower()
+            if joint_type not in ("revolute", "continuous", "prismatic"):
+                continue
+            specs = j.get("specs") or {}
+            lower_raw = (specs.get("lower_position") or {}).get("value")
+            upper_raw = (specs.get("upper_position") or {}).get("value")
+            if joint_type == "continuous" or (lower_raw is None and upper_raw is None):
+                lower, upper = -math.inf, math.inf
+            else:
+                lower = float(lower_raw) if lower_raw is not None else -math.pi
+                upper = float(upper_raw) if upper_raw is not None else math.pi
+            T_parent_pose = _pose_to_matrix(j.get("parentPose"))
+            chain.append({
+                "_id": str(j.get("id", "")),              # the robot joint _id: what Joint Controllers bind to
+                "_doc_id": str(j.get("id", "")),          # = config.jointOrder on the flat path
+                "_child_component_id": str(j.get("childLink", "")),  # = config.componentOrder (body order)
+                "name": j.get("name") or str(j.get("id", "")),
+                "type": joint_type,
+                "axis": T_parent_pose[:3, 0].copy(),      # X of the joint frame, in the parent link
+                "lower": lower,
+                "upper": upper,
+                "T_parent_pose": T_parent_pose,
+                "T_child_pose_inv": np.linalg.inv(_pose_to_matrix(j.get("childPose"))),
+            })
+        return chain
 
     def _build_chain(self) -> List[Dict[str, Any]]:
         """Build kinematic chain via BFS from root to end-effector."""
@@ -254,13 +368,18 @@ class InverseKinematicsKernel(PolyflowKernel):
             transforms.append(T_child)
         return transforms
 
+    def _ee_matrix(self, q: np.ndarray) -> np.ndarray:
+        """The end-effector frame in the root frame: the tip body's FK, carried to the end-effector part
+        and expressed in the root part's frame (both identity on the component path)."""
+        return self._T_root_part_inv @ self._forward_kinematics(q)[-1] @ self._T_ee_part
+
     def _ee_position(self, q: np.ndarray) -> np.ndarray:
         """Get end-effector position for joint angles q."""
-        return self._forward_kinematics(q)[-1][:3, 3]
+        return self._ee_matrix(q)[:3, 3]
 
     def _ee_pose(self, q: np.ndarray):
         """Get end-effector position and orientation (as quaternion x,y,z,w)."""
-        T = self._forward_kinematics(q)[-1]
+        T = self._ee_matrix(q)
         p = T[:3, 3]
         R = T[:3, :3]
         # Rotation matrix → quaternion (Shepperd's method)
@@ -319,13 +438,22 @@ class InverseKinematicsKernel(PolyflowKernel):
           world poses in the frame SAB).
         """
         return {
-            "root_component_id": self.root_component_id,
+            "root_component_id": self._chain_root_body(),
             "joint_doc_ids": [j["_doc_id"] for j in self._chain],
             "joint_ids": [j["_id"] for j in self._chain],
-            "body_component_ids": [self.root_component_id] + [
+            "body_component_ids": [self._chain_root_body()] + [
                 j["_child_component_id"] for j in self._chain
             ],
         }
+
+    def _chain_root_body(self) -> str:
+        """The root body's id in config.componentOrder: the component, or (flat) the root part's link."""
+        if not self._flat:
+            return self.root_component_id
+        for link in self.flat.get("links") or []:
+            if link.get("id") == self.root_part_id or any(m.get("partInstanceId") == self.root_part_id for m in link.get("members") or []):
+                return str(link.get("id", ""))
+        return ""
 
     def get_body_positions(self, joint_angles) -> List[List[float]]:
         """Per-link FK at joint_angles. Returns [[x,y,z], ...] in chain order
@@ -368,6 +496,22 @@ class InverseKinematicsKernel(PolyflowKernel):
 
         q_sol = result.x
         ee_err = np.linalg.norm(target_pos - self._ee_position(q_sol))
+        # The pull toward the current pose keeps successive solves on one branch (no flailing), but it
+        # also costs accuracy: from a straight, singular arm it outweighed a centimetre of position error.
+        # When that leaves the tip outside `tolerance`, polish from the smooth solution with a far weaker
+        # pull — the branch is already chosen, so this only closes the gap.
+        if ee_err > self.tolerance:
+            q_seed = q_sol.copy()
+            lam_polish = lam_reg * 1e-4
+
+            def polish(q):
+                return np.concatenate([target_pos - self._ee_position(q), math.sqrt(lam_polish) * (q - q_seed)])
+
+            polished = least_squares(polish, q_seed, bounds=(lower, upper), method="trf",
+                                     ftol=1e-15, xtol=1e-12, gtol=1e-12, max_nfev=self.max_iterations * 10)
+            polished_err = np.linalg.norm(target_pos - self._ee_position(polished.x))
+            if polished_err < ee_err:
+                q_sol, ee_err, result = polished.x, polished_err, polished
         self.log(f"IK {'converged' if result.success else 'did not converge'} "
                  f"(nfev={result.nfev}, err={ee_err:.6f}, cost={result.cost:.6f})")
         return q_sol.tolist()

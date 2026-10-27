@@ -15,11 +15,13 @@ The forward-kinematics chain matches the physics worker's convention exactly (`c
 
 ## Parameters
 
-- **Root Component** (`root_component_id`) — base of the kinematic chain.
-- **End Effector** (`end_effector_component_id`) — tip of the chain (gripper, hand, etc.). The solver walks from root to this component.
-- **Robot Components / Robot Joints** (`components`, `joints`) — auto-injected from the Robot on deployment. Hidden in the UI.
+- **Root Part** (`root_part_id`) — parts-built robots: any part on the chain's base body (usually the base part). Targets are in this part's frame.
+- **End Effector Part** (`end_effector_part_id`) — parts-built robots: the part whose frame is the tool point (a gripper palm, a foot). Any part welded to the tip body works.
+- **Robot Bodies** (`flat_articulation`) — auto-injected for a parts-built robot: its rigid bodies and the DOF joints between them, the same articulation the physics worker builds. Hidden in the UI. When present, the chain runs between the root part's body and the end-effector part's body, and `joint_commands` are keyed by the robot joint `_id` (what a Joint Controller on such a robot is bound to).
+- **Root Component** / **End Effector** (`root_component_id`, `end_effector_component_id`) — legacy, component-built robots: the chain runs between these components. On a parts-built robot a part id here is accepted too, so IK nodes placed before the part params existed keep working.
+- **Robot Components / Robot Joints** (`components`, `joints`) — auto-injected from the Robot on deployment (component-built robots). Hidden in the UI.
 - **Max Solver Iterations** (`max_iterations`) — iteration cap for `least_squares`. Default `100`.
-- **Position Tolerance** (`tolerance`) — convergence tolerance in meters. Default `0.001`.
+- **Position Tolerance** (`tolerance`) — in meters, default `0.001`. When the regularized solve (which keeps successive solutions on one branch) leaves the tip further than this from the target, a second pass with a far weaker pull closes the gap.
 - **Damping Factor** (`damping`) — damping (λ) for the DLS solver. Higher values improve stability near singularities at the cost of step size. Default `0.01`.
 
 ## Typical use
