@@ -138,6 +138,35 @@ class InverseKinematicsKernel(PolyflowKernel):
             p = T[:3, 3]
             self.log(f"  body[{i}] pos=({p[0]:.6f}, {p[1]:.6f}, {p[2]:.6f})")
 
+    # The params that define the chain. Changing one rebuilds it; anything else is a solver setting.
+    _CHAIN_PARAMS = ("root_part_id", "end_effector_part_id", "root_component_id", "end_effector_component_id",
+                     "flat_articulation", "components", "joints")
+
+    def set_param(self, key: str, value: Any):
+        """Live update without rebuilding the kernel on every push.
+
+        The base class re-runs setup() for any parameter. Studio pushes every parameter once when a sim
+        attaches, so a parts-built arm rebuilt its whole chain six times in a row — and on the sixth the
+        sim's Pyodide runtime died (memory access out of bounds, inside _build_flat_chain). Building it
+        once avoided the crash in the same worker; it never reproduced outside it, so the root cause is
+        still unknown. Rebuild only when a chain-defining value actually changes; apply solver settings
+        in place. The robot's structure arrives injected, so an empty push of it is ignored rather than
+        wiping the chain, and a parts-built chain ignores the component-era structure params."""
+        if key == "flat_articulation" and not value and self._flat:
+            return
+        old = self.parameters.get(key)
+        self.parameters[key] = value
+        if key in self._CHAIN_PARAMS:
+            if old == value or (self._flat and key in ("components", "joints")):
+                return
+            self.setup()
+        elif key == "max_iterations":
+            self.max_iterations = int(value)
+        elif key == "tolerance":
+            self.tolerance = float(value)
+        elif key == "regularization":
+            self._regularization = float(value)
+
     def _build_flat_chain(self) -> List[Dict[str, Any]]:
         """The chain between the bodies holding the root and end-effector parts, from the flat articulation.
 

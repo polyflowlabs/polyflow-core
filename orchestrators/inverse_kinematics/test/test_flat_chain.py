@@ -76,3 +76,19 @@ def test_says_why_when_the_chain_cannot_be_built():
     assert any("End-effector part 'nope' is not on this robot" in m for m in logs)
     _, _, logs = kernel(root_part_id="tool", end_effector_part_id="base")
     assert any("No path from the root part's body" in m for m in logs)
+
+
+def test_live_updates_rebuild_the_chain_only_when_it_changes():
+    # Studio pushes every parameter when a sim attaches; each push used to re-run setup().
+    k, _, _ = kernel(root_part_id="base", end_effector_part_id="tool")
+    builds = []
+    original = k._build_flat_chain
+    k._build_flat_chain = lambda: builds.append(1) or original()
+    for key, value in [("root_part_id", "base"), ("end_effector_part_id", "tool"), ("components", []), ("joints", []),
+                       ("flat_articulation", None), ("max_iterations", 50), ("tolerance", 0.0005)]:
+        k.set_param(key, value)
+    assert builds == []                          # nothing that defines the chain changed
+    assert len(k._chain) == 2                    # an empty structure push didn't wipe it
+    assert (k.max_iterations, k.tolerance) == (50, 0.0005)
+    k.set_param("end_effector_part_id", "upper_cover")
+    assert builds == [1] and [j["_id"] for j in k._chain] == ["j_shoulder"]
