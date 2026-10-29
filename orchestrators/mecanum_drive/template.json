@@ -1,0 +1,58 @@
+{
+  "type": "orchestrator",
+  "name": "Mecanum Drive",
+  "entry_point": "mecanum_drive/node.py",
+  "topics": [
+    {
+      "name": "cmd_vel_teleop",
+      "direction": "subscribe",
+      "msg_type": "geometry_msgs/Twist",
+      "description": "Teleop velocity command (linear.x forward, linear.y left, angular.z turn left; each [-1, 1]) — the Gamepad in 6dof mode. Takes priority over cmd_vel_automated whenever a fresh teleop message has arrived within teleop_timeout_s."
+    },
+    {
+      "name": "cmd_vel_automated",
+      "direction": "subscribe",
+      "msg_type": "geometry_msgs/Twist",
+      "description": "Autonomy or scripted velocity command (linear.x forward, linear.y left, angular.z turn left; each [-1, 1]). Used only when no recent teleop message is present."
+    },
+    {
+      "name": "front_left_motor",
+      "direction": "publish",
+      "msg_type": "std_msgs/Float64",
+      "description": "Front-left wheel command, normalized to [-1, 1]: linear.x − linear.y − angular.z. Positive drives the robot forward."
+    },
+    {
+      "name": "front_right_motor",
+      "direction": "publish",
+      "msg_type": "std_msgs/Float64",
+      "description": "Front-right wheel command, normalized to [-1, 1]: linear.x + linear.y + angular.z. Positive drives the robot forward."
+    },
+    {
+      "name": "back_left_motor",
+      "direction": "publish",
+      "msg_type": "std_msgs/Float64",
+      "description": "Back-left wheel command, normalized to [-1, 1]: linear.x + linear.y − angular.z. Positive drives the robot forward."
+    },
+    {
+      "name": "back_right_motor",
+      "direction": "publish",
+      "msg_type": "std_msgs/Float64",
+      "description": "Back-right wheel command, normalized to [-1, 1]: linear.x − linear.y + angular.z. Positive drives the robot forward."
+    }
+  ],
+  "services": [],
+  "actions": [],
+  "parameters_schema": {
+    "teleop_timeout_s": {
+      "label": "Teleop Timeout",
+      "type": "number",
+      "units": "s",
+      "default": 1.0,
+      "description": "Seconds without a teleop message before falling back to automated commands.",
+      "ui": { "group": "Priority", "order": 1 }
+    }
+  },
+  "defaults": {
+    "rate_hz": 50
+  }
+}
