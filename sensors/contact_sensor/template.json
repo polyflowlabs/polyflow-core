@@ -1,0 +1,36 @@
+{
+  "type": "sensor",
+  "name": "Contact Sensor",
+  "entry_point": "contact_sensor/node.py",
+  "topics": [
+    {
+      "name": "contact",
+      "direction": "publish",
+      "msg_type": "std_msgs/Bool",
+      "description": "True while the sensor touches the ground or an object (a walker's foot in stance)."
+    }
+  ],
+  "services": [],
+  "actions": [],
+  "parameters_schema": {
+    "sensor_id": {
+      "label": "Sensor",
+      "requiresInstance": true,
+      "type": "entity",
+      "required": true,
+      "description": "The sensor part on the robot this node reads (its placement). In Studio the simulator computes its reading; on the robot its adapter does.",
+      "entity_source": {
+        "selector": "parts",
+        "value_field": "_id",
+        "label_field": "_id"
+      },
+      "ui": {
+        "group": "Sensor",
+        "order": 1
+      }
+    }
+  },
+  "defaults": {
+    "rate_hz": 100
+  }
+}

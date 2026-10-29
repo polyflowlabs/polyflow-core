@@ -1,0 +1,36 @@
+{
+  "type": "sensor",
+  "name": "IMU",
+  "entry_point": "imu_sensor/node.py",
+  "topics": [
+    {
+      "name": "imu",
+      "direction": "publish",
+      "msg_type": "sensor_msgs/Imu",
+      "description": "Orientation (in a Z-up world), angular velocity (rad/s) and specific force (m/s²) in the sensor's frame — +9.81 along its up axis when still."
+    }
+  ],
+  "services": [],
+  "actions": [],
+  "parameters_schema": {
+    "sensor_id": {
+      "label": "Sensor",
+      "requiresInstance": true,
+      "type": "entity",
+      "required": true,
+      "description": "The sensor part on the robot this node reads (its placement). In Studio the simulator computes its reading; on the robot its adapter does.",
+      "entity_source": {
+        "selector": "parts",
+        "value_field": "_id",
+        "label_field": "_id"
+      },
+      "ui": {
+        "group": "Sensor",
+        "order": 1
+      }
+    }
+  },
+  "defaults": {
+    "rate_hz": 100
+  }
+}

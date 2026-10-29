@@ -1,0 +1,47 @@
+{
+  "type": "sensor",
+  "name": "Range Sensor",
+  "entry_point": "range_sensor/node.py",
+  "topics": [
+    {
+      "name": "range",
+      "direction": "publish",
+      "msg_type": "sensor_msgs/Range",
+      "description": "Distance (m) along the sensor's axis to the first thing in the way; max_range when nothing is in reach."
+    }
+  ],
+  "services": [],
+  "actions": [],
+  "parameters_schema": {
+    "sensor_id": {
+      "label": "Sensor",
+      "requiresInstance": true,
+      "type": "entity",
+      "required": true,
+      "description": "The sensor part on the robot this node reads (its placement). In Studio the simulator computes its reading; on the robot its adapter does.",
+      "entity_source": {
+        "selector": "parts",
+        "value_field": "_id",
+        "label_field": "_id"
+      },
+      "ui": {
+        "group": "Sensor",
+        "order": 1
+      }
+    },
+    "field_of_view_rad": {
+      "label": "Field of View",
+      "type": "number",
+      "units": "rad",
+      "default": 0.47,
+      "description": "The sensor's cone (a VL53L1X: 27°).",
+      "ui": {
+        "group": "Sensor",
+        "order": 2
+      }
+    }
+  },
+  "defaults": {
+    "rate_hz": 100
+  }
+}

@@ -1,0 +1,23 @@
+[project]
+name = "polyflow-sensors-adapter"
+version = "0.1.0"
+description = "Polyflow hardware adapters for sensors: BNO085 IMU, GPIO contact switch, VL53L1X time-of-flight range."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Polyflow Robotics" }]
+
+dependencies = [
+    "polyflow-adapter-sdk>=0.1.0",
+    "adafruit-blinka>=8.0",
+    "adafruit-circuitpython-bno08x>=1.2",
+    "adafruit-circuitpython-vl53l1x>=1.2",
+    "gpiozero>=2.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
