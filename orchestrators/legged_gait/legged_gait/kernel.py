@@ -236,12 +236,15 @@ class LeggedGaitKernel(PolyflowKernel):
         self.step_height = g("step_height", 0.04)
         self.crouch = min(max(g("crouch", 0.8), 0.3), 1.0)
         self.max_speed = g("max_speed", 0.03)
-        self.max_yaw_rate = g("max_yaw_rate", 0.25)
+        self.max_yaw_rate = g("max_yaw_rate", 0.25)   # capped further by max_stride at the hips
         self.max_stride = g("max_stride", 0.12)
         self.shift_fraction = min(max(g("shift_fraction", 0.35), 0.05), 0.9)
-        self.shift_gain = min(max(g("shift_gain", 1.0), 0.0), 1.0)
+        # Half-way to the support triangle's centroid (further where the triangle needs it — see
+        # _plan_quarter): the body sways half as far. All the way (1.0) threw ~6 cm of body sideways every
+        # quarter and the walker tipped 14°; at 0.5 it crawled straight at 3 cm/s, 5° at worst.
+        self.shift_gain = min(max(g("shift_gain", 0.5), 0.0), 1.0)
         self.com_offset = np.array([g("com_offset_x", 0.0), g("com_offset_y", 0.0)])
-        self.level_gain = g("level_gain", 1.5)
+        self.level_gain = g("level_gain", 3.0)
         self.max_level = math.radians(g("max_level_deg", 12.0))
         self.startup_s = max(g("startup_s", 2.0), 0.0)
         self.cmd_timeout_s = g("cmd_timeout_s", 0.0)   # 0: hold the last command, like the drives' automated input
@@ -406,7 +409,12 @@ class LeggedGaitKernel(PolyflowKernel):
             return
         R = _quat_matrix(orientation)
         if self._imu_ref is None:
-            # Sensor → body, from the first reading: the body is standing as it was built then.
+            # Sensor → body, calibrated once the startup crouch has settled — standing level, as built.
+            # Not off the FIRST reading: after a reset that can still be the last run's (the sim's sensor
+            # buffer holds it until physics writes again), and a real robot is still settling then; a
+            # calibration taken tilted holds the body tilted by the same amount for good.
+            if self._t < max(self.startup_s, 0.5):
+                return
             self._imu_ref = self._R_base.T @ _YUP_TO_ZUP.T @ R
             self._imu_t = self._t
             return
@@ -468,7 +476,16 @@ class LeggedGaitKernel(PolyflowKernel):
     def _command(self) -> np.ndarray:
         if self.cmd_timeout_s > 0 and self._t - self._cmd_t > self.cmd_timeout_s:
             return np.zeros(3)
-        return self._cmd * np.array([self.max_speed, self.max_speed, self.max_yaw_rate])
+        v = self._cmd * np.array([self.max_speed, self.max_speed, self.max_yaw_rate])
+        # No hip may travel further than max_stride in a cycle — walking, turning, or both. A foot stays
+        # put for most of a cycle while the body moves over it; turned 57° in that time (0.25 rad/s over
+        # 4 s) the hips swung ~25 cm off feet they couldn't reach, the abductions hit their stops, and the
+        # body tipped 36°. Scaling the whole command keeps its direction and only slows it.
+        if self.legs and np.any(v):
+            reach = max(float(np.linalg.norm(v[:2] + v[2] * np.array([-n[1], n[0]]))) for n in self._neutral.values()) * self.cycle_s
+            if reach > self.max_stride:
+                v = v * (self.max_stride / reach)
+        return v
 
     def com(self) -> np.ndarray:
         """The body's centre of mass in the ground frame."""
@@ -480,18 +497,23 @@ class LeggedGaitKernel(PolyflowKernel):
     def _plan_quarter(self):
         leg = CRAWL_ORDER[self._quarter]
         v = self._command()
-        stride = v[:2] * self.cycle_s
-        n = float(np.linalg.norm(stride))
-        if n > self.max_stride:
-            stride *= self.max_stride / n
+        stride = v[:2] * self.cycle_s                   # already within max_stride (see _command)
         # Where the commanded body will be when this leg touches down, a quarter from now.
         quarter_s = self.cycle_s / 4.0
         psi1 = self._psi_v + v[2] * quarter_s
         b_td = self._b_v + _rot2(self._psi_v, v[:2] * quarter_s)
-        # Body: its COM over the centroid of the three feet that stay down.
-        centroid = np.mean(self._support(leg), axis=0)
+        # Body: its COM toward the centroid of the three feet that stay down — `shift_gain` of the way, or
+        # further when that leaves it near an edge of the triangle: at least half the margin a full shift
+        # would give. Walking straight, half-way is plenty; turning, the triangles skew and it isn't.
+        support = self._support(leg)
+        centroid = np.mean(support, axis=0)
         neutral_b = np.mean(list(self.footholds.values()), axis=0) - _rot2(psi1, self._com0)
-        b1 = neutral_b + self.shift_gain * ((centroid - _rot2(psi1, self._com0)) - neutral_b)
+        full_b = centroid - _rot2(psi1, self._com0)
+        need = 0.5 * _inside_triangle(centroid, support)
+        g = self.shift_gain
+        while g < 1.0 and _inside_triangle(neutral_b + g * (full_b - neutral_b) + _rot2(psi1, self._com0), support) < need:
+            g = min(1.0, g + 0.05)
+        b1 = neutral_b + g * (full_b - neutral_b)
         # Foothold: half a stride ahead of where its hip will be on the COMMANDED body at touchdown — not
         # the body shifted over a triangle, whose offset would leave the feet splayed when it stops.
         place = b_td + _rot2(psi1, self._neutral[leg] + stride / 2.0)

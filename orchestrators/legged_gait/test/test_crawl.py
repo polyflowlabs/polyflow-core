@@ -105,7 +105,7 @@ def test_walks_forward_with_the_com_always_over_the_support_triangle():
     travelled = k.com() - start
     assert travelled[0] == pytest.approx(3 * k.max_speed * k.cycle_s, abs=0.03)   # the commanded 0.36 m
     assert abs(travelled[1]) < 0.005
-    assert min(margins) > 0.01                                    # a centimetre inside, every swing tick
+    assert min(margins) > 0.01                                    # a centimetre inside, every swing tick (at the default half-way shift)
     assert max(errors) < 2e-3                                     # the IK keeps up
 
 
@@ -134,11 +134,23 @@ def test_stops_and_settles_back_under_the_hips():
         assert np.linalg.norm(rel - k._neutral[name]) < 0.01
 
 
-def test_turns_left_on_angular_z():
+def test_turns_left_on_angular_z_with_no_hip_travelling_further_than_a_stride():
     k, _ = kernel()
     run(k, 1.0)
-    run(k, 2 * k.cycle_s, cmd=twist(z=1.0))
-    assert k._psi == pytest.approx(2 * k.cycle_s * k.max_yaw_rate, rel=0.3)
+    k.process_input("cmd_vel", twist(z=1.0))
+    w = k._command()[2]
+    reach = max(abs(w) * np.linalg.norm(n) for n in k._neutral.values()) * k.cycle_s
+    assert 0 < w <= k.max_yaw_rate and reach == pytest.approx(min(k.max_stride, k.max_yaw_rate * max(np.linalg.norm(n) for n in k._neutral.values()) * k.cycle_s))
+    margins = []
+
+    def check(k):
+        p = k._plan
+        if k._state == "walk" and p and k._lift[p["leg"]] > 1e-4:
+            margins.append(_inside_triangle(k.com(), k._support(p["leg"])))
+
+    run(k, 2 * k.cycle_s, check, cmd=twist(z=1.0))
+    assert k._psi == pytest.approx(2 * k.cycle_s * w, rel=0.3)
+    assert min(margins) > 0.01
 
 
 def _qmul(a, b):
@@ -150,11 +162,12 @@ def _qmul(a, b):
 
 def test_levels_a_nose_down_body_by_reaching_further_with_the_front_feet():
     k, _ = kernel()
-    run(k, 1.0)
     to_zup = (S45, 0.0, 0.0, S45)                 # the IMU's world is Z-up: +90° about X
     nose_down = (0.0, 0.0, -math.sin(0.05), math.cos(0.05))   # −0.1 rad about Z (right) in the Y-up world
     level = dict(zip("xyzw", to_zup))
     tilted = dict(zip("xyzw", _qmul(to_zup, nose_down)))
+    k.process_input("imu", {"orientation": tilted})   # a stale first reading: ignored before startup ends
+    run(k, 1.0)
     k.process_input("imu", {"orientation": level})
     for _ in range(100):
         k.process_input("imu", {"orientation": tilted})

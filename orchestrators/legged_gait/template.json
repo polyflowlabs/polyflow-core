@@ -128,7 +128,7 @@
       "type": "number",
       "units": "rad/s",
       "default": 0.25,
-      "description": "Turning rate at a full cmd_vel angular.z.",
+      "description": "Turning rate at a full cmd_vel angular.z — slowed further if the hips would travel more than max_stride in a cycle.",
       "ui": {
         "group": "Gait",
         "order": 5
@@ -139,7 +139,7 @@
       "type": "number",
       "units": "m",
       "default": 0.12,
-      "description": "The longest step a foot takes in one cycle, whatever the speed.",
+      "description": "The furthest any hip travels over its planted foot in one cycle — walking, turning or both. Faster commands are scaled down to it, keeping their direction.",
       "ui": {
         "group": "Gait",
         "order": 6
@@ -158,8 +158,8 @@
     "shift_gain": {
       "label": "Shift Gain",
       "type": "number",
-      "default": 1.0,
-      "description": "How far the centre of mass moves toward the support triangle's centroid (1 = all the way).",
+      "default": 0.5,
+      "description": "How far the centre of mass moves toward the support triangle's centroid before a leg lifts (1 = all the way). Half-way keeps it inside the triangle and the body steadier; raise it for a heavy or top-heavy robot.",
       "ui": {
         "group": "Balance",
         "order": 2
@@ -190,7 +190,7 @@
     "level_gain": {
       "label": "Level Gain",
       "type": "number",
-      "default": 1.5,
+      "default": 3.0,
       "description": "How fast the IMU levels the body (per second). 0 turns levelling off.",
       "ui": {
         "group": "Balance",
