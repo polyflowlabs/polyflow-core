@@ -187,6 +187,18 @@ def test_a_foot_that_touches_early_stays_where_it_touched():
     assert k._z_off["rl"] > 0.0
 
 
+def test_a_foot_switch_on_the_foot_is_still_one_leg():
+    flat = quadruped()
+    for link in flat["links"]:
+        if link["id"].endswith("_shin"):
+            # The switch mates up onto the shin's foot with its own `foot` face; its sole is 8 mm lower.
+            link["members"].append({"partInstanceId": link["id"] + "_switch", "poseInLink": pose(0, -SHIN, 0), "foot": pose(0, -SHIN, 0)})
+            link["members"].append({"partInstanceId": link["id"] + "_sole", "poseInLink": pose(0, -SHIN - 0.008, 0), "foot": pose(0, -SHIN - 0.008, 0)})
+    k = LeggedGaitKernel("gait", {"flat_articulation": flat}, on_emit=lambda *_: None, on_log=lambda _m: None)
+    assert sorted(k.legs) == sorted(LEGS)
+    assert k.legs["fl"].foot(np.zeros(3))[1] == pytest.approx(-THIGH - SHIN - 0.008)
+
+
 def test_a_robot_without_four_feet_stays_idle():
     flat = quadruped()
     flat["links"] = [l for l in flat["links"] if not l["id"].startswith("rr")]

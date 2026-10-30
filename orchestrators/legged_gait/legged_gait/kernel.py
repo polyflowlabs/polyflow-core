@@ -272,13 +272,16 @@ class LeggedGaitKernel(PolyflowKernel):
         self.left = np.cross(self.up, self.fwd)
 
         # Feet: every member with a `foot` off the base body. Without any, each leaf body's origin.
+        # One foot per body: a foot-contact switch on a shin's foot carries a `foot` of its own (the face
+        # it mates up with), so a body can list two — the lowest at rest is where it meets the ground.
         feet: List[Tuple[str, np.ndarray]] = []
         for link in links:
             if link is base:
                 continue
-            for m in link.get("members") or []:
-                if m.get("foot"):
-                    feet.append((str(link.get("id")), _pose_matrix(m["foot"])))
+            own = [_pose_matrix(m["foot"]) for m in link.get("members") or [] if m.get("foot")]
+            if own:
+                rest = _pose_matrix(link.get("restWorld"))
+                feet.append((str(link.get("id")), min(own, key=lambda T: float((rest @ T)[1, 3]))))
         if not feet:
             parents = {str(j.get("parentLink")) for j in joints}
             feet = [(str(l.get("id")), np.eye(4)) for l in links if l is not base and str(l.get("id")) not in parents]
