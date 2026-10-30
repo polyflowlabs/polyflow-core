@@ -1,0 +1,26 @@
+[project]
+name = "legged_gait"
+version = "0.1.0"
+description = "Polyflow legged gait (quadruped crawl) orchestrator node"
+license = "MIT"
+authors = [
+    {name = "Drew Swinney", email = "drew@polyflowrobotics.com"},
+]
+maintainers = [
+    {name = "Drew Swinney", email = "drew@polyflowrobotics.com"},
+]
+dependencies = ["setuptools", "numpy"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools.data-files]
+"share/ament_index/resource_index/packages" = ["resource/legged_gait"]
+"share/legged_gait" = ["package.xml"]
+
+[project.scripts]
+legged_gait_node = "legged_gait.node:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
