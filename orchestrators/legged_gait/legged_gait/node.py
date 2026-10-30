@@ -1,7 +1,7 @@
 import asyncio
 
 from geometry_msgs.msg import Twist
-from sensor_msgs.msg import Imu
+from sensor_msgs.msg import Imu, JointState
 from std_msgs.msg import Bool
 from trajectory_msgs.msg import JointTrajectoryPoint
 from common.polyflow_node import PolyflowNode
@@ -18,6 +18,7 @@ class LeggedGaitNode(PolyflowNode):
 
         self.register_input_pin("cmd_vel", Twist)
         self.register_input_pin("imu", Imu)
+        self.register_input_pin("joint_states", JointState)
         for leg in LEGS:
             self.register_input_pin(f"contact_{leg}", Bool)
 

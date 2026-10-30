@@ -160,8 +160,15 @@ class LeggedGaitKernel(PolyflowKernel):
       1. SHIFT: with all four feet down, move the body so its centre of mass sits over the centroid of
          the three feet that will stay down — the support triangle — before anything lifts.
       2. SWING: lift that leg (`step_height`), carry it to its next foothold half a stride ahead of the
-         hip, and put it down. With foot contact wired it keeps lowering until the foot touches
-         (up to `probe_depth`), or stops early when it touches sooner.
+         hip, and put it down. It keeps lowering until the foot touches (up to `probe_depth`), or stops
+         early when it touches sooner.
+
+    Knows a foot is down WITHOUT a foot sensor: wire each leg joint's Joint Controller `state` back into
+    `joint_states`, and the leg's measured efforts, through its Jacobian, give the force the ground
+    pushes the foot up with — a quasi-direct-drive leg is backdrivable enough for that to read cleanly
+    (the Mini Cheetah's way; Spot's too). Touchdown is that force crossing `contact_force_n` (0 = a third
+    of the foot's share of the weight the robot stood on at startup). A contact_* sensor, where one is
+    wired, wins for its leg.
     Feet in stance never move in the ground frame, so the legs never fight each other: the body moves
     by shifting over the feet, and that is the walk.
 
@@ -174,11 +181,14 @@ class LeggedGaitKernel(PolyflowKernel):
 
     Inputs:
         cmd_vel     Twist, normalized [-1, 1] like the Gamepad: linear.x forward, linear.y left,
-                    angular.z turn left — scaled by max_speed and max_yaw_rate. Zero (or none for
-                    cmd_timeout_s) stands still.
+                    angular.z turn left — scaled by max_speed and max_yaw_rate. Held until the next one
+                    (a released gamepad sends zero); zero stands still. cmd_timeout_s > 0 stops it when
+                    the commands stop coming.
         imu         sensor_msgs/Imu from an IMU Sensor node on the body.
-        contact_fl / contact_fr / contact_rl / contact_rr   std_msgs/Bool from each foot's Contact
-                    Sensor node.
+        joint_states  sensor_msgs/JointState from every leg joint's Joint Controller (fan-in, one joint
+                    per message): the measured efforts are the foot-contact estimate.
+        contact_fl / contact_fr / contact_rl / contact_rr   std_msgs/Bool from a foot Contact Sensor
+                    node, for a robot that has them (optional; overrides the estimate for that leg).
     Output:
         joint_commands  {name: [joint ids], positions: [rad | m]} for every leg joint.
     """
@@ -201,6 +211,10 @@ class LeggedGaitKernel(PolyflowKernel):
         self._imu_t = 0.0
         self._level = np.zeros(3)
         self._contact: Dict[str, bool] = {}
+        self._q_meas: Dict[str, float] = {}
+        self._tau: Dict[str, float] = {}
+        self._force: Dict[str, float] = {}          # each foot's filtered ground force, N, up
+        self._weight_n: Optional[float] = None       # what the four feet carried standing, at startup
         self._state = "stand"
         self._quarter = 0
         self._s = 0.0
@@ -230,9 +244,11 @@ class LeggedGaitKernel(PolyflowKernel):
         self.level_gain = g("level_gain", 1.5)
         self.max_level = math.radians(g("max_level_deg", 12.0))
         self.startup_s = max(g("startup_s", 2.0), 0.0)
-        self.cmd_timeout_s = g("cmd_timeout_s", 1.0)
+        self.cmd_timeout_s = g("cmd_timeout_s", 0.0)   # 0: hold the last command, like the drives' automated input
         self.probe_depth = g("probe_depth", 0.02)
         self.probe_speed = g("probe_speed", 0.05)
+        self.contact_force_n = g("contact_force_n", 0.0)
+        self.contact_filter = min(max(g("contact_filter", 0.3), 0.01), 1.0)
 
     def set_param(self, key: str, value: Any):
         """A tuning change applies in place — the gait keeps its footholds. Only a change to the robot
@@ -246,6 +262,8 @@ class LeggedGaitKernel(PolyflowKernel):
                 self.setup()
         else:
             self._read_tunables()
+            if key == "crouch" and self.legs:
+                self._raise = (1.0 - self.crouch) * self._reach   # the standing height follows at once
 
     # ─── Structure ───
 
@@ -322,7 +340,8 @@ class LeggedGaitKernel(PolyflowKernel):
             heights.append(reach)
             self._neutral[name] = np.array([np.dot(p, self.fwd), np.dot(p, self.left)])
         self._rest_h = {n: float(np.dot(lg.foot(np.zeros(len(lg.actuated))), self.up)) for n, lg in self.legs.items()}
-        self._raise = (1.0 - self.crouch) * float(np.mean(heights))
+        self._reach = float(np.mean(heights))
+        self._raise = (1.0 - self.crouch) * self._reach
         self._com0 = np.mean(list(self._neutral.values()), axis=0) + self.com_offset
         self.log(f"Legged gait: legs {', '.join(f'{n}={len(lg.actuated)} joints' for n, lg in sorted(self.legs.items()))}; "
                  f"stands {self._raise * 1000:.0f} mm crouched")
@@ -371,6 +390,13 @@ class LeggedGaitKernel(PolyflowKernel):
             self._cmd_t = self._t
         elif pin_id == "imu":
             self._on_imu((data or {}).get("orientation") or {})
+        elif pin_id == "joint_states":
+            d = data or {}
+            names = d.get("name") or []
+            for key, store in (("position", self._q_meas), ("effort", self._tau)):
+                for n, v in zip(names, d.get(key) or []):
+                    if v is not None:
+                        store[str(n)] = float(v)
         elif pin_id.startswith("contact_") and pin_id[8:] in LEGS:
             value = (data or {}).get("data", data) if isinstance(data, dict) else data
             self._contact[pin_id[8:]] = bool(value)
@@ -395,6 +421,41 @@ class LeggedGaitKernel(PolyflowKernel):
         if n > self.max_level:
             self._level *= self.max_level / n
 
+    # ─── Contact ───
+
+    def foot_force(self, leg: str) -> Optional[float]:
+        """The force the ground pushes this foot UP with, N, from the leg's measured joint efforts — or
+        None until every one of its joints has reported. The motors push the foot down with F where
+        τ = Jᵀ F; the ground's reaction is −F."""
+        lg = self.legs[leg]
+        ids = lg.joint_ids()
+        if not ids or any(i not in self._tau for i in ids):
+            return None
+        q = np.array([self._q_meas.get(i, float(v)) for i, v in zip(ids, lg.q)])
+        p, frames = lg.fk(q)
+        J = np.column_stack([np.cross(ax, p - o) if t != "prismatic" else ax for o, ax, t in frames])
+        tau = np.array([self._tau[i] for i in ids])
+        f_push, *_ = np.linalg.lstsq(J.T, tau, rcond=None)
+        return float(np.dot(-f_push, self.up))
+
+    def _update_contact(self):
+        for leg in self.legs:
+            f = self.foot_force(leg)
+            if f is not None:
+                prev = self._force.get(leg, f)
+                self._force[leg] = prev + self.contact_filter * (f - prev)
+        if self._weight_n is None and self._state == "stand" and self._t >= self.startup_s and len(self._force) == 4:
+            self._weight_n = max(sum(self._force.values()), 0.0)
+
+    def touching(self, leg: str) -> Optional[bool]:
+        """Is this foot down: its contact sensor if it has one, else the effort estimate, else unknown."""
+        if leg in self._contact:
+            return self._contact[leg]
+        if leg not in self._force:
+            return None
+        threshold = self.contact_force_n if self.contact_force_n > 0 else (max(3.0, self._weight_n / 12.0) if self._weight_n else None)
+        return None if threshold is None else self._force[leg] > threshold
+
     # ─── The gait ───
 
     def poll(self):
@@ -405,7 +466,7 @@ class LeggedGaitKernel(PolyflowKernel):
             self._emit_commands()
 
     def _command(self) -> np.ndarray:
-        if self._t - self._cmd_t > self.cmd_timeout_s:
+        if self.cmd_timeout_s > 0 and self._t - self._cmd_t > self.cmd_timeout_s:
             return np.zeros(3)
         return self._cmd * np.array([self.max_speed, self.max_speed, self.max_yaw_rate])
 
@@ -440,6 +501,7 @@ class LeggedGaitKernel(PolyflowKernel):
 
     def step(self, dt: float):
         self._t += dt
+        self._update_contact()
         moving = bool(np.any(np.abs(self._command()) > 1e-6))
         ready = self._t >= self.startup_s
 
@@ -471,7 +533,7 @@ class LeggedGaitKernel(PolyflowKernel):
         self._b, self._psi = p["b1"].copy(), p["psi1"]
 
         u = min(1.0, (s - self.shift_fraction) / (1.0 - self.shift_fraction))
-        touching = self._contact.get(leg)
+        touching = self.touching(leg)
         if u < 1.0:
             self._z_off[leg] = 0.0
             self.footholds[leg] = p["lift"] + (p["place"] - p["lift"]) * _smooth(u)
@@ -485,7 +547,7 @@ class LeggedGaitKernel(PolyflowKernel):
 
         self.footholds[leg] = p["place"].copy()
         self._lift[leg] = 0.0
-        # Not down yet with a contact sensor on it: keep lowering it until it is, or it's out of reach.
+        # Not down yet (by its sensor or its efforts): keep lowering it until it is, or it's out of reach.
         if touching is False and self._z_off[leg] > -self.probe_depth:
             p["probing"] = True
             self._z_off[leg] = max(-self.probe_depth, self._z_off[leg] - self.probe_speed * dt)

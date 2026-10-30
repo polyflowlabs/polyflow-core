@@ -207,3 +207,76 @@ def test_a_robot_without_four_feet_stays_idle():
     k = LeggedGaitKernel("gait", {"flat_articulation": flat}, on_emit=lambda *_: None, on_log=logs.append)
     k.poll()
     assert not k.legs and any("needs exactly 4" in m for m in logs)
+
+
+def _feed_efforts(k, leg, f_up, q=None):
+    """Joint states for one leg whose foot the ground pushes up with `f_up` N (τ = Jᵀ·(−F))."""
+    lg = k.legs[leg]
+    q = lg.q if q is None else q
+    p, frames = lg.fk(q)
+    J = np.column_stack([np.cross(ax, p - o) for o, ax, _ in frames])
+    tau = J.T @ (-f_up * k.up)
+    k.process_input("joint_states", {"name": lg.joint_ids(), "position": [float(v) for v in q], "effort": [float(v) for v in tau]})
+
+
+def test_reads_each_foots_ground_force_from_its_joint_efforts():
+    k, _ = kernel()
+    run(k, 1.0)
+    _feed_efforts(k, "fl", 20.0)
+    assert k.foot_force("fl") == pytest.approx(20.0, rel=1e-6)
+    assert k.foot_force("fr") is None              # not reported yet
+
+
+def test_knows_a_foot_is_down_from_efforts_alone():
+    k, _ = kernel()
+    for leg in LEGS:
+        _feed_efforts(k, leg, 15.0)                # standing: 60 N on four feet
+    run(k, 1.0)
+    assert k._weight_n == pytest.approx(60.0, rel=0.05)
+    assert all(k.touching(leg) for leg in LEGS)
+    _feed_efforts(k, "rl", 0.5)                    # lifted
+    for _ in range(10):
+        k.poll()
+    assert k.touching("rl") is False and k.touching("fl") is True
+
+
+def test_a_foot_with_no_force_on_it_reaches_down_for_the_ground():
+    k, _ = kernel()
+    for leg in LEGS:
+        _feed_efforts(k, leg, 15.0)
+    run(k, 1.0)
+    reached = []
+
+    def unloaded_rl(k):
+        _feed_efforts(k, "rl", 0.0)                # rl never meets the ground
+        reached.append(k._z_off["rl"])
+
+    run(k, k.cycle_s / 2, unloaded_rl, cmd=twist(x=1.0))
+    assert min(reached) == pytest.approx(-k.probe_depth)
+
+
+def test_a_contact_sensor_overrides_the_effort_estimate():
+    k, _ = kernel()
+    for leg in LEGS:
+        _feed_efforts(k, leg, 15.0)
+    run(k, 1.0)
+    k.process_input("contact_fl", {"data": False})
+    assert k.touching("fl") is False
+
+
+def test_holds_a_single_walk_command_and_stops_on_zero():
+    k, _ = kernel()
+    k.process_input("cmd_vel", twist(x=1.0))         # sent once, as a sim test or a mission does
+    run(k, 1.0 + k.cycle_s)
+    assert k._state == "walk"
+    k.process_input("cmd_vel", twist())
+    run(k, 2 * k.cycle_s)
+    assert k._state == "stand"
+
+
+def test_a_crouch_change_moves_the_standing_height_at_once():
+    k, _ = kernel()
+    run(k, 1.0)
+    k.set_param("crouch", 0.9)
+    run(k, 0.5)
+    assert k.legs["fl"].foot()[1] == pytest.approx(-(THIGH + SHIN) * 0.9, abs=2e-3)
