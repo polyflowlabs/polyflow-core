@@ -1,0 +1,253 @@
+{
+  "type": "orchestrator",
+  "name": "Legged Gait",
+  "entry_point": "legged_gait/node.py",
+  "topics": [
+    {
+      "name": "cmd_vel",
+      "direction": "subscribe",
+      "msg_type": "geometry_msgs/Twist",
+      "description": "Walk command, normalized [-1, 1] like the Gamepad: linear.x forward, linear.y left, angular.z turn left — scaled by max_speed and max_yaw_rate. Zero, or nothing for cmd_timeout_s, stands still."
+    },
+    {
+      "name": "imu",
+      "direction": "subscribe",
+      "msg_type": "sensor_msgs/Imu",
+      "description": "An IMU Sensor on the body. Optional: with it the gait holds the body level, calibrating against its first reading (the robot standing as built)."
+    },
+    {
+      "name": "contact_fl",
+      "direction": "subscribe",
+      "msg_type": "std_msgs/Bool",
+      "description": "The front-left foot's Contact Sensor. Optional: with it, a swing ends when the foot actually touches (lowering up to probe_depth further if it hasn't)."
+    },
+    {
+      "name": "contact_fr",
+      "direction": "subscribe",
+      "msg_type": "std_msgs/Bool",
+      "description": "The front-right foot's Contact Sensor. Optional: with it, a swing ends when the foot actually touches (lowering up to probe_depth further if it hasn't)."
+    },
+    {
+      "name": "contact_rl",
+      "direction": "subscribe",
+      "msg_type": "std_msgs/Bool",
+      "description": "The rear-left foot's Contact Sensor. Optional: with it, a swing ends when the foot actually touches (lowering up to probe_depth further if it hasn't)."
+    },
+    {
+      "name": "contact_rr",
+      "direction": "subscribe",
+      "msg_type": "std_msgs/Bool",
+      "description": "The rear-right foot's Contact Sensor. Optional: with it, a swing ends when the foot actually touches (lowering up to probe_depth further if it hasn't)."
+    },
+    {
+      "name": "joint_commands",
+      "direction": "publish",
+      "msg_type": "trajectory_msgs/JointTrajectoryPoint[]",
+      "description": "Target positions for every leg joint. Wire it into each leg joint's Joint Controller (each takes its own joint)."
+    }
+  ],
+  "services": [],
+  "actions": [],
+  "parameters_schema": {
+    "forward": {
+      "label": "Forward",
+      "type": "enum",
+      "values": [
+        "+X",
+        "-X",
+        "+Z",
+        "-Z"
+      ],
+      "default": "+X",
+      "description": "Which world axis is the robot's front, as it stands built (Y is up). Names the legs front/rear and sets which way +linear.x walks.",
+      "ui": {
+        "group": "Robot",
+        "order": 1
+      }
+    },
+    "flat_articulation": {
+      "label": "Robot Bodies",
+      "type": "FlatArticulation",
+      "default": {},
+      "description": "Auto-injected: the robot's rigid bodies and DOF joints. The gait finds the four legs in it — each the joints from the base body to a body with a foot (a part with a `foot` connector).",
+      "ui": {
+        "hidden": true
+      }
+    },
+    "cycle_s": {
+      "label": "Cycle Time",
+      "type": "number",
+      "units": "s",
+      "default": 4.0,
+      "description": "One full crawl cycle — all four legs stepped once.",
+      "ui": {
+        "group": "Gait",
+        "order": 1
+      }
+    },
+    "step_height": {
+      "label": "Step Height",
+      "type": "number",
+      "units": "m",
+      "default": 0.04,
+      "description": "How high a swinging foot lifts.",
+      "ui": {
+        "group": "Gait",
+        "order": 2
+      }
+    },
+    "crouch": {
+      "label": "Crouch",
+      "type": "number",
+      "default": 0.8,
+      "description": "Standing height as a fraction of the leg's straight length (bent knees are stronger and have room to reach).",
+      "ui": {
+        "group": "Gait",
+        "order": 3
+      }
+    },
+    "max_speed": {
+      "label": "Max Speed",
+      "type": "number",
+      "units": "m/s",
+      "default": 0.03,
+      "description": "Walking speed at a full cmd_vel (linear.x or linear.y = 1).",
+      "ui": {
+        "group": "Gait",
+        "order": 4
+      }
+    },
+    "max_yaw_rate": {
+      "label": "Max Turn Rate",
+      "type": "number",
+      "units": "rad/s",
+      "default": 0.25,
+      "description": "Turning rate at a full cmd_vel angular.z.",
+      "ui": {
+        "group": "Gait",
+        "order": 5
+      }
+    },
+    "max_stride": {
+      "label": "Max Stride",
+      "type": "number",
+      "units": "m",
+      "default": 0.12,
+      "description": "The longest step a foot takes in one cycle, whatever the speed.",
+      "ui": {
+        "group": "Gait",
+        "order": 6
+      }
+    },
+    "shift_fraction": {
+      "label": "Shift Fraction",
+      "type": "number",
+      "default": 0.35,
+      "description": "Share of each leg's quarter cycle spent moving the body over the next support triangle before the leg lifts.",
+      "ui": {
+        "group": "Balance",
+        "order": 1
+      }
+    },
+    "shift_gain": {
+      "label": "Shift Gain",
+      "type": "number",
+      "default": 1.0,
+      "description": "How far the centre of mass moves toward the support triangle's centroid (1 = all the way).",
+      "ui": {
+        "group": "Balance",
+        "order": 2
+      }
+    },
+    "com_offset_x": {
+      "label": "COM Offset Forward",
+      "type": "number",
+      "units": "m",
+      "default": 0.0,
+      "description": "Where the centre of mass sits forward of the feet's centre (a heavy head, a battery at the back).",
+      "ui": {
+        "group": "Balance",
+        "order": 3
+      }
+    },
+    "com_offset_y": {
+      "label": "COM Offset Left",
+      "type": "number",
+      "units": "m",
+      "default": 0.0,
+      "description": "Where the centre of mass sits left of the feet's centre.",
+      "ui": {
+        "group": "Balance",
+        "order": 4
+      }
+    },
+    "level_gain": {
+      "label": "Level Gain",
+      "type": "number",
+      "default": 1.5,
+      "description": "How fast the IMU levels the body (per second). 0 turns levelling off.",
+      "ui": {
+        "group": "Balance",
+        "order": 5
+      }
+    },
+    "max_level_deg": {
+      "label": "Max Level Correction",
+      "type": "number",
+      "units": "deg",
+      "default": 12.0,
+      "description": "The most the feet are tilted to hold the body level.",
+      "ui": {
+        "group": "Balance",
+        "order": 6
+      }
+    },
+    "probe_depth": {
+      "label": "Probe Depth",
+      "type": "number",
+      "units": "m",
+      "default": 0.02,
+      "description": "With contact sensors: how much further a foot reaches down for the ground before giving up.",
+      "ui": {
+        "group": "Contact",
+        "order": 1
+      }
+    },
+    "probe_speed": {
+      "label": "Probe Speed",
+      "type": "number",
+      "units": "m/s",
+      "default": 0.05,
+      "description": "How fast a foot reaches down for the ground.",
+      "ui": {
+        "group": "Contact",
+        "order": 2
+      }
+    },
+    "startup_s": {
+      "label": "Startup Time",
+      "type": "number",
+      "units": "s",
+      "default": 2.0,
+      "description": "Time to crouch from the built pose into the standing pose before walking.",
+      "ui": {
+        "group": "Gait",
+        "order": 7
+      }
+    },
+    "cmd_timeout_s": {
+      "label": "Command Timeout",
+      "type": "number",
+      "units": "s",
+      "default": 1.0,
+      "description": "Seconds without a cmd_vel before the robot stops.",
+      "ui": {
+        "group": "Gait",
+        "order": 8
+      }
+    }
+  },
+  "defaults": {
+    "rate_hz": 50
+  }
+}
