@@ -84,7 +84,7 @@
       "label": "Cycle Time",
       "type": "number",
       "units": "s",
-      "default": 4.0,
+      "default": 3.0,
       "description": "One full crawl cycle — all four legs stepped once.",
       "ui": {
         "group": "Gait",
@@ -116,8 +116,8 @@
       "label": "Max Speed",
       "type": "number",
       "units": "m/s",
-      "default": 0.03,
-      "description": "Walking speed at a full cmd_vel (linear.x or linear.y = 1).",
+      "default": 0,
+      "description": "Walking speed at a full cmd_vel (linear.x or linear.y = 1). 0 (default) = one max stride per cycle — about 7 cm/s on a 27 cm leg.",
       "ui": {
         "group": "Gait",
         "order": 4
@@ -138,8 +138,8 @@
       "label": "Max Stride",
       "type": "number",
       "units": "m",
-      "default": 0.12,
-      "description": "The furthest any hip travels over its planted foot in one cycle — walking, turning or both. Faster commands are scaled down to it, keeping their direction.",
+      "default": 0,
+      "description": "The furthest any hip travels over its planted foot in one cycle — walking, turning or both. 0 (default) = 55% of the leg's reach. Faster commands are scaled down to it, keeping their direction.",
       "ui": {
         "group": "Gait",
         "order": 6

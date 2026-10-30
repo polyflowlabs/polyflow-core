@@ -232,12 +232,12 @@ class LeggedGaitKernel(PolyflowKernel):
 
     def _read_tunables(self):
         g = lambda k, d: float(self.get_param(k, d))
-        self.cycle_s = max(g("cycle_s", 4.0), 0.4)
+        self.cycle_s = max(g("cycle_s", 3.0), 0.4)
         self.step_height = g("step_height", 0.04)
         self.crouch = min(max(g("crouch", 0.8), 0.3), 1.0)
-        self.max_speed = g("max_speed", 0.03)
+        self.max_speed_param = g("max_speed", 0.0)          # 0: one max stride per cycle
         self.max_yaw_rate = g("max_yaw_rate", 0.25)   # capped further by max_stride at the hips
-        self.max_stride = g("max_stride", 0.12)
+        self.max_stride_param = g("max_stride", 0.0)        # 0: 55% of the leg's reach
         self.shift_fraction = min(max(g("shift_fraction", 0.35), 0.05), 0.9)
         # Half-way to the support triangle's centroid (further where the triangle needs it — see
         # _plan_quarter): the body sways half as far. All the way (1.0) threw ~6 cm of body sideways every
@@ -252,6 +252,20 @@ class LeggedGaitKernel(PolyflowKernel):
         self.probe_speed = g("probe_speed", 0.05)
         self.contact_force_n = g("contact_force_n", 0.0)
         self.contact_filter = min(max(g("contact_filter", 0.3), 0.01), 1.0)
+
+    @property
+    def max_stride(self) -> float:
+        """The furthest a hip travels over its planted foot in a cycle — 55% of the leg's reach unless set.
+        Sized from the leg, not a fixed number: 12 cm was a shuffle for a 27 cm leg and too far for a small one."""
+        if self.max_stride_param > 0:
+            return self.max_stride_param
+        return 0.55 * getattr(self, "_reach", 0.2)
+
+    @property
+    def max_speed(self) -> float:
+        """Walking speed at a full cmd_vel — a max stride per cycle unless set. A crawl on a 27 cm leg ran
+        straight and steady to ~7 cm/s (a 3 s cycle); past that it tipped without going faster."""
+        return self.max_speed_param if self.max_speed_param > 0 else self.max_stride / self.cycle_s
 
     def set_param(self, key: str, value: Any):
         """A tuning change applies in place — the gait keeps its footholds. Only a change to the robot
