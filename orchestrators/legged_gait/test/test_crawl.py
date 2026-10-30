@@ -105,7 +105,7 @@ def test_walks_forward_with_the_com_always_over_the_support_triangle():
     travelled = k.com() - start
     assert travelled[0] == pytest.approx(3 * k.max_speed * k.cycle_s, abs=0.03)   # the commanded 0.36 m
     assert abs(travelled[1]) < 0.005
-    assert min(margins) > 0.01                                    # a centimetre inside, every swing tick
+    assert min(margins) > 0.01                                    # a centimetre inside, every swing tick (at the default half-way shift)
     assert max(errors) < 2e-3                                     # the IK keeps up
 
 
@@ -134,11 +134,23 @@ def test_stops_and_settles_back_under_the_hips():
         assert np.linalg.norm(rel - k._neutral[name]) < 0.01
 
 
-def test_turns_left_on_angular_z():
+def test_turns_left_on_angular_z_with_no_hip_travelling_further_than_a_stride():
     k, _ = kernel()
     run(k, 1.0)
-    run(k, 2 * k.cycle_s, cmd=twist(z=1.0))
-    assert k._psi == pytest.approx(2 * k.cycle_s * k.max_yaw_rate, rel=0.3)
+    k.process_input("cmd_vel", twist(z=1.0))
+    w = k._command()[2]
+    reach = max(abs(w) * np.linalg.norm(n) for n in k._neutral.values()) * k.cycle_s
+    assert 0 < w <= k.max_yaw_rate and reach == pytest.approx(min(k.max_stride, k.max_yaw_rate * max(np.linalg.norm(n) for n in k._neutral.values()) * k.cycle_s))
+    margins = []
+
+    def check(k):
+        p = k._plan
+        if k._state == "walk" and p and k._lift[p["leg"]] > 1e-4:
+            margins.append(_inside_triangle(k.com(), k._support(p["leg"])))
+
+    run(k, 2 * k.cycle_s, check, cmd=twist(z=1.0))
+    assert k._psi == pytest.approx(2 * k.cycle_s * w, rel=0.3)
+    assert min(margins) > 0.01
 
 
 def _qmul(a, b):
@@ -150,11 +162,12 @@ def _qmul(a, b):
 
 def test_levels_a_nose_down_body_by_reaching_further_with_the_front_feet():
     k, _ = kernel()
-    run(k, 1.0)
     to_zup = (S45, 0.0, 0.0, S45)                 # the IMU's world is Z-up: +90° about X
     nose_down = (0.0, 0.0, -math.sin(0.05), math.cos(0.05))   # −0.1 rad about Z (right) in the Y-up world
     level = dict(zip("xyzw", to_zup))
     tilted = dict(zip("xyzw", _qmul(to_zup, nose_down)))
+    k.process_input("imu", {"orientation": tilted})   # a stale first reading: ignored before startup ends
+    run(k, 1.0)
     k.process_input("imu", {"orientation": level})
     for _ in range(100):
         k.process_input("imu", {"orientation": tilted})
@@ -207,3 +220,76 @@ def test_a_robot_without_four_feet_stays_idle():
     k = LeggedGaitKernel("gait", {"flat_articulation": flat}, on_emit=lambda *_: None, on_log=logs.append)
     k.poll()
     assert not k.legs and any("needs exactly 4" in m for m in logs)
+
+
+def _feed_efforts(k, leg, f_up, q=None):
+    """Joint states for one leg whose foot the ground pushes up with `f_up` N (τ = Jᵀ·(−F))."""
+    lg = k.legs[leg]
+    q = lg.q if q is None else q
+    p, frames = lg.fk(q)
+    J = np.column_stack([np.cross(ax, p - o) for o, ax, _ in frames])
+    tau = J.T @ (-f_up * k.up)
+    k.process_input("joint_states", {"name": lg.joint_ids(), "position": [float(v) for v in q], "effort": [float(v) for v in tau]})
+
+
+def test_reads_each_foots_ground_force_from_its_joint_efforts():
+    k, _ = kernel()
+    run(k, 1.0)
+    _feed_efforts(k, "fl", 20.0)
+    assert k.foot_force("fl") == pytest.approx(20.0, rel=1e-6)
+    assert k.foot_force("fr") is None              # not reported yet
+
+
+def test_knows_a_foot_is_down_from_efforts_alone():
+    k, _ = kernel()
+    for leg in LEGS:
+        _feed_efforts(k, leg, 15.0)                # standing: 60 N on four feet
+    run(k, 1.0)
+    assert k._weight_n == pytest.approx(60.0, rel=0.05)
+    assert all(k.touching(leg) for leg in LEGS)
+    _feed_efforts(k, "rl", 0.5)                    # lifted
+    for _ in range(10):
+        k.poll()
+    assert k.touching("rl") is False and k.touching("fl") is True
+
+
+def test_a_foot_with_no_force_on_it_reaches_down_for_the_ground():
+    k, _ = kernel()
+    for leg in LEGS:
+        _feed_efforts(k, leg, 15.0)
+    run(k, 1.0)
+    reached = []
+
+    def unloaded_rl(k):
+        _feed_efforts(k, "rl", 0.0)                # rl never meets the ground
+        reached.append(k._z_off["rl"])
+
+    run(k, k.cycle_s / 2, unloaded_rl, cmd=twist(x=1.0))
+    assert min(reached) == pytest.approx(-k.probe_depth)
+
+
+def test_a_contact_sensor_overrides_the_effort_estimate():
+    k, _ = kernel()
+    for leg in LEGS:
+        _feed_efforts(k, leg, 15.0)
+    run(k, 1.0)
+    k.process_input("contact_fl", {"data": False})
+    assert k.touching("fl") is False
+
+
+def test_holds_a_single_walk_command_and_stops_on_zero():
+    k, _ = kernel()
+    k.process_input("cmd_vel", twist(x=1.0))         # sent once, as a sim test or a mission does
+    run(k, 1.0 + k.cycle_s)
+    assert k._state == "walk"
+    k.process_input("cmd_vel", twist())
+    run(k, 2 * k.cycle_s)
+    assert k._state == "stand"
+
+
+def test_a_crouch_change_moves_the_standing_height_at_once():
+    k, _ = kernel()
+    run(k, 1.0)
+    k.set_param("crouch", 0.9)
+    run(k, 0.5)
+    assert k.legs["fl"].foot()[1] == pytest.approx(-(THIGH + SHIN) * 0.9, abs=2e-3)

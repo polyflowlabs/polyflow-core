@@ -7,7 +7,7 @@
       "name": "cmd_vel",
       "direction": "subscribe",
       "msg_type": "geometry_msgs/Twist",
-      "description": "Walk command, normalized [-1, 1] like the Gamepad: linear.x forward, linear.y left, angular.z turn left — scaled by max_speed and max_yaw_rate. Zero, or nothing for cmd_timeout_s, stands still."
+      "description": "Walk command, normalized [-1, 1] like the Gamepad: linear.x forward, linear.y left, angular.z turn left — scaled by max_speed and max_yaw_rate. Held until the next one; zero stands still."
     },
     {
       "name": "imu",
@@ -16,28 +16,34 @@
       "description": "An IMU Sensor on the body. Optional: with it the gait holds the body level, calibrating against its first reading (the robot standing as built)."
     },
     {
+      "name": "joint_states",
+      "direction": "subscribe",
+      "msg_type": "sensor_msgs/JointState",
+      "description": "Every leg joint's Joint Controller `state`, fanned in. The measured efforts, through each leg's Jacobian, are the force the ground pushes each foot up with — how the gait knows a foot is down without a foot sensor."
+    },
+    {
       "name": "contact_fl",
       "direction": "subscribe",
       "msg_type": "std_msgs/Bool",
-      "description": "The front-left foot's Contact Sensor. Optional: with it, a swing ends when the foot actually touches (lowering up to probe_depth further if it hasn't)."
+      "description": "The front-left foot's Contact Sensor. Optional — only for a robot with foot sensors; otherwise contact comes from joint_states. With it, a swing ends when the foot actually touches (lowering up to probe_depth further if it hasn't)."
     },
     {
       "name": "contact_fr",
       "direction": "subscribe",
       "msg_type": "std_msgs/Bool",
-      "description": "The front-right foot's Contact Sensor. Optional: with it, a swing ends when the foot actually touches (lowering up to probe_depth further if it hasn't)."
+      "description": "The front-right foot's Contact Sensor. Optional — only for a robot with foot sensors; otherwise contact comes from joint_states. With it, a swing ends when the foot actually touches (lowering up to probe_depth further if it hasn't)."
     },
     {
       "name": "contact_rl",
       "direction": "subscribe",
       "msg_type": "std_msgs/Bool",
-      "description": "The rear-left foot's Contact Sensor. Optional: with it, a swing ends when the foot actually touches (lowering up to probe_depth further if it hasn't)."
+      "description": "The rear-left foot's Contact Sensor. Optional — only for a robot with foot sensors; otherwise contact comes from joint_states. With it, a swing ends when the foot actually touches (lowering up to probe_depth further if it hasn't)."
     },
     {
       "name": "contact_rr",
       "direction": "subscribe",
       "msg_type": "std_msgs/Bool",
-      "description": "The rear-right foot's Contact Sensor. Optional: with it, a swing ends when the foot actually touches (lowering up to probe_depth further if it hasn't)."
+      "description": "The rear-right foot's Contact Sensor. Optional — only for a robot with foot sensors; otherwise contact comes from joint_states. With it, a swing ends when the foot actually touches (lowering up to probe_depth further if it hasn't)."
     },
     {
       "name": "joint_commands",
@@ -78,7 +84,7 @@
       "label": "Cycle Time",
       "type": "number",
       "units": "s",
-      "default": 4.0,
+      "default": 3.0,
       "description": "One full crawl cycle — all four legs stepped once.",
       "ui": {
         "group": "Gait",
@@ -110,8 +116,8 @@
       "label": "Max Speed",
       "type": "number",
       "units": "m/s",
-      "default": 0.03,
-      "description": "Walking speed at a full cmd_vel (linear.x or linear.y = 1).",
+      "default": 0,
+      "description": "Walking speed at a full cmd_vel (linear.x or linear.y = 1). 0 (default) = one max stride per cycle — about 7 cm/s on a 27 cm leg.",
       "ui": {
         "group": "Gait",
         "order": 4
@@ -122,7 +128,7 @@
       "type": "number",
       "units": "rad/s",
       "default": 0.25,
-      "description": "Turning rate at a full cmd_vel angular.z.",
+      "description": "Turning rate at a full cmd_vel angular.z — slowed further if the hips would travel more than max_stride in a cycle.",
       "ui": {
         "group": "Gait",
         "order": 5
@@ -132,8 +138,8 @@
       "label": "Max Stride",
       "type": "number",
       "units": "m",
-      "default": 0.12,
-      "description": "The longest step a foot takes in one cycle, whatever the speed.",
+      "default": 0,
+      "description": "The furthest any hip travels over its planted foot in one cycle — walking, turning or both. 0 (default) = 55% of the leg's reach. Faster commands are scaled down to it, keeping their direction.",
       "ui": {
         "group": "Gait",
         "order": 6
@@ -152,8 +158,8 @@
     "shift_gain": {
       "label": "Shift Gain",
       "type": "number",
-      "default": 1.0,
-      "description": "How far the centre of mass moves toward the support triangle's centroid (1 = all the way).",
+      "default": 0.5,
+      "description": "How far the centre of mass moves toward the support triangle's centroid before a leg lifts (1 = all the way). Half-way keeps it inside the triangle and the body steadier; raise it for a heavy or top-heavy robot.",
       "ui": {
         "group": "Balance",
         "order": 2
@@ -184,7 +190,7 @@
     "level_gain": {
       "label": "Level Gain",
       "type": "number",
-      "default": 1.5,
+      "default": 3.0,
       "description": "How fast the IMU levels the body (per second). 0 turns levelling off.",
       "ui": {
         "group": "Balance",
@@ -207,7 +213,7 @@
       "type": "number",
       "units": "m",
       "default": 0.02,
-      "description": "With contact sensors: how much further a foot reaches down for the ground before giving up.",
+      "description": "How much further a foot reaches down for the ground before giving up, when it hasn't touched yet.",
       "ui": {
         "group": "Contact",
         "order": 1
@@ -239,11 +245,32 @@
       "label": "Command Timeout",
       "type": "number",
       "units": "s",
-      "default": 1.0,
-      "description": "Seconds without a cmd_vel before the robot stops.",
+      "default": 0,
+      "description": "Seconds without a cmd_vel before the robot stops. 0 (default) holds the last command — a released gamepad sends zero, and an automated command (a mission, a sim test) is sent once.",
       "ui": {
         "group": "Gait",
         "order": 8
+      }
+    },
+    "contact_force_n": {
+      "label": "Contact Force",
+      "type": "number",
+      "units": "N",
+      "default": 0,
+      "description": "The ground force (from joint efforts) above which a foot counts as down. 0 = a third of each foot's share of the weight the robot stands on at startup.",
+      "ui": {
+        "group": "Contact",
+        "order": 3
+      }
+    },
+    "contact_filter": {
+      "label": "Contact Filter",
+      "type": "number",
+      "default": 0.3,
+      "description": "Smoothing on the foot-force estimate, 0–1 per tick (1 = none).",
+      "ui": {
+        "group": "Contact",
+        "order": 4
       }
     }
   },
