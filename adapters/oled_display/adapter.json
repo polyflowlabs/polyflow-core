@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "name": "oled_display",
+  "parameters": {},
+  "drivers": [
+    {
+      "name": "sh1106_display",
+      "class": "oled_display_adapter.display_adapter:SH1106DisplayAdapter",
+      "iotype_compat": [
+        "display"
+      ],
+      "parameters": {
+        "i2c_address": {
+          "label": "I²C Address",
+          "description": "0x3C (60) with DC to GND, 0x3D (61) with DC high.",
+          "type": "number",
+          "default": 60
+        },
+        "i2c_bus": {
+          "label": "I²C Bus",
+          "description": "/dev/i2c-N. 1 on a Raspberry Pi's 40-pin header.",
+          "type": "number",
+          "default": 1
+        },
+        "fps": {
+          "label": "Frame Rate (Hz)",
+          "description": "How often the face is redrawn; only changed rows are sent.",
+          "type": "number",
+          "default": 15,
+          "min": 1,
+          "max": 30
+        },
+        "flip": {
+          "label": "Upside Down",
+          "description": "Turn the picture 180° for a screen mounted with its header at the bottom.",
+          "type": "boolean",
+          "default": false
+        },
+        "contrast": {
+          "label": "Brightness",
+          "description": "0–255. Leave empty for the chip's default.",
+          "type": "number",
+          "min": 0,
+          "max": 255
+        },
+        "expression": {
+          "label": "Starting Expression",
+          "type": "enum",
+          "values": [
+            "neutral",
+            "happy",
+            "sad",
+            "angry",
+            "surprised",
+            "sleepy",
+            "off"
+          ],
+          "default": "neutral"
+        }
+      }
+    },
+    {
+      "name": "ssd1306_display",
+      "class": "oled_display_adapter.display_adapter:SSD1306DisplayAdapter",
+      "iotype_compat": [
+        "display"
+      ],
+      "parameters": {
+        "i2c_address": {
+          "label": "I²C Address",
+          "description": "0x3D (61) on Adafruit's board; 0x3C (60) with its address jumper closed.",
+          "type": "number",
+          "default": 61
+        },
+        "i2c_bus": {
+          "label": "I²C Bus",
+          "description": "/dev/i2c-N. 1 on a Raspberry Pi's 40-pin header.",
+          "type": "number",
+          "default": 1
+        },
+        "fps": {
+          "label": "Frame Rate (Hz)",
+          "description": "How often the face is redrawn; only changed rows are sent.",
+          "type": "number",
+          "default": 15,
+          "min": 1,
+          "max": 30
+        },
+        "flip": {
+          "label": "Upside Down",
+          "description": "Turn the picture 180° for a screen mounted with its header at the bottom.",
+          "type": "boolean",
+          "default": false
+        },
+        "contrast": {
+          "label": "Brightness",
+          "description": "0–255. Leave empty for the chip's default.",
+          "type": "number",
+          "min": 0,
+          "max": 255
+        },
+        "expression": {
+          "label": "Starting Expression",
+          "type": "enum",
+          "values": [
+            "neutral",
+            "happy",
+            "sad",
+            "angry",
+            "surprised",
+            "sleepy",
+            "off"
+          ],
+          "default": "neutral"
+        }
+      }
+    }
+  ]
+}
