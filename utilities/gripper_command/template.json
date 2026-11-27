@@ -1,0 +1,79 @@
+{
+  "type": "utility",
+  "name": "Gripper Command",
+  "entry_point": "gripper_command/node.py",
+  "topics": [
+    {
+      "name": "button",
+      "direction": "subscribe",
+      "msg_type": "std_msgs/Bool",
+      "description": "A button's pressed state (Bool From Gamepad). Toggle mode: each press flips open/closed. Hold mode: closed while pressed."
+    },
+    {
+      "name": "trajectory",
+      "direction": "publish",
+      "msg_type": "trajectory_msgs/JointTrajectoryPoint",
+      "description": "The gripper joint's target: its open or closed position. Wire into the gripper's Joint Controller trajectory."
+    },
+    {
+      "name": "closed",
+      "direction": "publish",
+      "msg_type": "std_msgs/Bool",
+      "description": "Whether the gripper is commanded closed."
+    }
+  ],
+  "services": [],
+  "actions": [],
+  "parameters_schema": {
+    "joint_id": {
+      "label": "Gripper Joint",
+      "requiresInstance": true,
+      "type": "entity",
+      "required": true,
+      "description": "The gripper's DRIVEN joint (the one its motor turns, not a jaw that mimics it). Open and closed are read off its travel limits.",
+      "entity_source": { "selector": "joints", "value_field": "_id", "label_field": "name" },
+      "ui": { "group": "Gripper", "order": 1 }
+    },
+    "open_position": {
+      "label": "Open Position",
+      "type": "number",
+      "source": "entity_property",
+      "editable": false,
+      "binding": { "from_param": "joint_id", "field_path": "specs.lower_position.value" },
+      "description": "The joint's lower travel limit.",
+      "ui": { "group": "Gripper", "order": 2 }
+    },
+    "closed_position": {
+      "label": "Closed Position",
+      "type": "number",
+      "source": "entity_property",
+      "editable": false,
+      "binding": { "from_param": "joint_id", "field_path": "specs.upper_position.value" },
+      "description": "The joint's upper travel limit.",
+      "ui": { "group": "Gripper", "order": 3 }
+    },
+    "mode": {
+      "label": "Button Mode",
+      "type": "string",
+      "default": "toggle",
+      "allowed_values": ["toggle", "hold"],
+      "description": "toggle: each press flips open/closed. hold: closed while the button is held.",
+      "ui": { "group": "Gripper", "order": 4 }
+    },
+    "start_closed": {
+      "label": "Start Closed",
+      "type": "boolean",
+      "default": false,
+      "description": "The state a toggle starts from.",
+      "ui": { "group": "Gripper", "order": 5 }
+    },
+    "invert": {
+      "label": "Invert",
+      "type": "boolean",
+      "default": false,
+      "description": "Swap open and closed, for a gripper whose closed end is its lower limit.",
+      "ui": { "group": "Gripper", "order": 6 }
+    }
+  },
+  "defaults": {}
+}
