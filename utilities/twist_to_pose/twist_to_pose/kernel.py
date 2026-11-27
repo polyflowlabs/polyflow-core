@@ -61,7 +61,7 @@ class TwistToPoseKernel(PolyflowKernel):
 
     Parameters:
         rate_hz, frame ("body" | "world"), require_seed, require_enable,
-        linear_scale / angular_scale (full stick → m/s, rad/s),
+        linear_scale / angular_scale (full stick → m/s, rad/s), hold_when_idle,
         ws_min_x/y/z, ws_max_x/y/z (optional position clamps).
     """
 
@@ -75,6 +75,11 @@ class TwistToPoseKernel(PolyflowKernel):
         # 1.0 keeps the twist as it comes (a node that already sends real units).
         self.linear_scale = float(self.get_param("linear_scale", 1.0) or 1.0)
         self.angular_scale = float(self.get_param("angular_scale", 1.0) or 1.0)
+        # false: publish only while the twist is moving the hand. At rest the pose isn't held, so joint-level
+        # commands (sliders, a test, another node) aren't overridden — and the next motion starts again from
+        # the latest seed_pose (the hand's real pose), not from wherever the integrator was left.
+        self.hold_when_idle = bool(self.get_param("hold_when_idle", True))
+        self._idle = False
 
         self._ws_min = [self.get_param(k) for k in ("ws_min_x", "ws_min_y", "ws_min_z")]
         self._ws_max = [self.get_param(k) for k in ("ws_max_x", "ws_max_y", "ws_max_z")]
@@ -178,6 +183,15 @@ class TwistToPoseKernel(PolyflowKernel):
             # Enabled gate closed — still emit the held pose so downstream stays warm
             self._emit_pose()
             return
+
+        moving = any(abs(v) > 1e-9 for v in (*self._linear, *self._angular))
+        if not self.hold_when_idle:
+            if not moving:
+                self._idle = True
+                return
+            if self._idle and self._seed_pose is not None:
+                self._apply_seed(self._seed_pose)
+            self._idle = False
 
         if self.frame == "body":
             v_world = _q_rotate_vec(self._orientation, *self._linear)

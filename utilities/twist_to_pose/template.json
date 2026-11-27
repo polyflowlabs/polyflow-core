@@ -55,6 +55,13 @@
       "description": "Multiplies the incoming angular velocity: the hand's turn rate at full stick. 1 passes it through unchanged.",
       "ui": { "group": "Integration", "order": 3 }
     },
+    "hold_when_idle": {
+      "label": "Hold Pose When Idle",
+      "type": "boolean",
+      "default": true,
+      "description": "true: keep publishing the held pose when the twist is zero. false: publish only while moving, so joint-level commands aren't overridden at rest; the next motion starts from the latest seed_pose (the hand's real pose).",
+      "ui": { "group": "Integration", "order": 4 }
+    },
     "frame": {
       "label": "Twist Frame",
       "type": "string",
