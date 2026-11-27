@@ -22,11 +22,10 @@
       "name": "odrive_can",
       "class": "odrive_adapter.can_adapter:ODriveCANAdapter",
       "iotype_compat": ["joint"],
-      "host_hint": "socketcan_bus",
       "parameters": {
         "node_id": {
           "label": "CAN Node ID",
-          "description": "Node ID of this axis on the CAN bus (0–63).",
+          "description": "Node ID of this axis on the CAN bus (0–63). Derived from the axis's place on the bus chain: 1 for the first after the CAN HAT, then 2, 3 …",
           "type": "number",
           "min": 0,
           "max": 63,
