@@ -16,6 +16,7 @@ The kernel holds an internal pose, applies the latest Twist at the configured in
 ## Parameters
 
 - **Integration Rate** (`rate_hz`) — how often to integrate the latest Twist. Default `50` Hz.
+- **Linear Speed / Turn Rate at Full Stick** (`linear_scale`, `angular_scale`) — multiply the incoming twist. A gamepad sends −1…1, so these set the hand's speed at full stick in m/s and rad/s (a desk arm: `0.1` and `0.5`). Default `1`, which passes the twist through unchanged.
 - **Twist Frame** (`frame`) — `body` interprets velocity in the current pose's frame (forward = where the EE points); `world` applies velocity to fixed world axes.
 - **Require Seed Pose** (`require_seed`) — gate output until a `seed_pose` has been received. Prevents emitting `(0,0,0)` before the integrator is anchored. Default `true`.
 - **Require Enable** (`require_enable`) — gate velocity on the `enable` Bool. On falling edge, the integrator re-snaps to the last `seed_pose` so re-enabling starts cleanly. Default `true`.

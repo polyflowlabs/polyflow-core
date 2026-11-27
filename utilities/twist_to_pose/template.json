@@ -39,6 +39,22 @@
       "description": "How often to integrate the latest Twist into the running pose.",
       "ui": { "group": "Integration", "order": 1 }
     },
+    "linear_scale": {
+      "label": "Linear Speed at Full Stick",
+      "type": "number",
+      "units": "m/s",
+      "default": 1.0,
+      "description": "Multiplies the incoming linear velocity. A gamepad sends -1..1, so this is the hand's speed at full stick (0.1 = 10 cm/s for a desk arm). 1 passes the twist through unchanged.",
+      "ui": { "group": "Integration", "order": 2 }
+    },
+    "angular_scale": {
+      "label": "Turn Rate at Full Stick",
+      "type": "number",
+      "units": "rad/s",
+      "default": 1.0,
+      "description": "Multiplies the incoming angular velocity: the hand's turn rate at full stick. 1 passes it through unchanged.",
+      "ui": { "group": "Integration", "order": 3 }
+    },
     "frame": {
       "label": "Twist Frame",
       "type": "string",
