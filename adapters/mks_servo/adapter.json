@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "name": "mks_servo",
+  "parameters": {
+    "gear_ratio": {
+      "label": "Gear Ratio",
+      "description": "Motor turns per joint turn (N:1), from the joint's gearbox or transmission. Set by the deploy from the joint.",
+      "type": "number",
+      "default": 1,
+      "min": 0.0001
+    }
+  },
+  "drivers": [
+    {
+      "name": "mks_servo_can",
+      "class": "mks_servo_adapter.can_adapter:MksServoCANAdapter",
+      "iotype_compat": ["joint"],
+      "parameters": {
+        "can_id": {
+          "label": "CAN ID",
+          "description": "The driver's CAN ID (its CanID menu setting), 1–2047. Derived from the driver's place on the bus chain: 1 for the first after the CAN HAT, then 2, 3 …",
+          "type": "number",
+          "min": 1,
+          "max": 2047,
+          "required": true
+        },
+        "channel": {
+          "label": "CAN Channel",
+          "description": "The SocketCAN interface the bus is on: can0 for the HAT's channel A, can1 for channel B.",
+          "type": "string",
+          "default": "can0"
+        },
+        "invert": {
+          "label": "Invert Direction",
+          "description": "Flip the motor's direction when the joint moves the wrong way on first power-up.",
+          "type": "boolean",
+          "default": false
+        },
+        "move_speed_rpm": {
+          "label": "Move Speed (motor RPM)",
+          "description": "Motor speed for a position move that doesn't name one.",
+          "type": "number",
+          "default": 600,
+          "min": 1,
+          "max": 3000
+        },
+        "max_speed_rpm": {
+          "label": "Max Speed (motor RPM)",
+          "type": "number",
+          "default": 3000,
+          "min": 1,
+          "max": 3000
+        },
+        "acceleration": {
+          "label": "Acceleration (0–255)",
+          "description": "The driver's acceleration setting: higher ramps faster; 0 runs at speed with no ramp.",
+          "type": "number",
+          "default": 100,
+          "min": 0,
+          "max": 255
+        },
+        "zero_on_start": {
+          "label": "Zero On Start",
+          "description": "Take the position at startup as the joint's zero. Off: the driver's power-on position is the zero.",
+          "type": "boolean",
+          "default": false
+        },
+        "poll_hz": {
+          "label": "State Poll Rate (Hz)",
+          "type": "number",
+          "default": 50,
+          "min": 1
+        }
+      }
+    }
+  ]
+}

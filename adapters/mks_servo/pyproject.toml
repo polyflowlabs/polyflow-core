@@ -1,0 +1,20 @@
+[project]
+name = "polyflow-mks-servo-adapter"
+version = "0.1.0"
+description = "Polyflow hardware adapter for Makerbase MKS SERVO42D / 57D / 28D closed-loop steppers over CAN."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Polyflow Robotics" }]
+
+dependencies = [
+    "polyflow-adapter-sdk>=0.1.0",
+    "python-can>=4.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
