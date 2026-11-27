@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "name": "gpio_motors",
+  "parameters": {},
+  "drivers": [
+    {
+      "name": "tb6612_motor",
+      "class": "gpio_motor_adapter.tb6612_adapter:TB6612MotorAdapter",
+      "iotype_compat": ["joint"],
+      "parameters": {
+        "pwm_pin": { "label": "PWM Pin (BCM)", "description": "The Pi GPIO wired to this channel's PWMA/PWMB. Assigned by the deploy.", "type": "number", "min": 0, "max": 27, "required": true },
+        "in1_pin": { "label": "IN1 Pin (BCM)", "description": "The Pi GPIO wired to AIN1/BIN1. Assigned by the deploy.", "type": "number", "min": 0, "max": 27, "required": true },
+        "in2_pin": { "label": "IN2 Pin (BCM)", "description": "The Pi GPIO wired to AIN2/BIN2. Assigned by the deploy.", "type": "number", "min": 0, "max": 27, "required": true },
+        "stby_pin": { "label": "STBY Pin (BCM)", "description": "Optional. Leave empty and wire STBY to 3.3 V.", "type": "number", "min": 0, "max": 27 },
+        "max_speed_rad_s": { "label": "Speed at Full Duty (rad/s)", "description": "The joint's speed at 100% duty, which maps a Motor Controller's speed command to duty. The deploy fills it in from the joint's top speed.", "type": "number", "default": 5 },
+        "pwm_hz": { "label": "PWM Frequency (Hz)", "type": "number", "default": 1000, "min": 1, "max": 10000 },
+        "min_duty": { "label": "Minimum Duty", "description": "Duty below which the motor doesn't turn (0–1); commands above zero start here.", "type": "number", "default": 0, "min": 0, "max": 1 },
+        "brake_on_stop": { "label": "Brake on Stop", "description": "Short-brake the motor at zero instead of letting it coast.", "type": "boolean", "default": true },
+        "invert": { "label": "Invert Direction", "type": "boolean", "default": false }
+      }
+    },
+    {
+      "name": "stepstick_stepper",
+      "class": "gpio_motor_adapter.stepstick_adapter:StepStickAdapter",
+      "iotype_compat": ["joint"],
+      "parameters": {
+        "step_pin": { "label": "STEP Pin (BCM)", "description": "The Pi GPIO wired to the driver's STEP. Assigned by the deploy.", "type": "number", "min": 0, "max": 27, "required": true },
+        "dir_pin": { "label": "DIR Pin (BCM)", "description": "The Pi GPIO wired to the driver's DIR. Assigned by the deploy.", "type": "number", "min": 0, "max": 27, "required": true },
+        "enable_pin": { "label": "EN Pin (BCM)", "description": "Optional, active low. Leave empty and wire EN to GND (always energized).", "type": "number", "min": 0, "max": 27 },
+        "steps_per_rev": { "label": "Full Steps per Revolution", "description": "200 for a 1.8° motor, 400 for a 0.9° one.", "type": "number", "default": 200 },
+        "microsteps": { "label": "Microsteps", "description": "What the driver's MS pins are set to. The build instructions set them to 1/16.", "type": "number", "default": 16 },
+        "gear_ratio": { "label": "Reduction", "description": "Motor turns per joint turn (gearbox × belt/gears). Filled in by the deploy.", "type": "number", "default": 1 },
+        "max_speed_rad_s": { "label": "Joint Top Speed (rad/s)", "type": "number", "default": 1 },
+        "accel_rad_s2": { "label": "Joint Acceleration (rad/s²)", "type": "number", "default": 2 },
+        "max_step_rate_hz": { "label": "Max Step Rate (Hz)", "type": "number", "default": 20000 },
+        "zero_on_start": { "label": "Zero at Power-On", "description": "The joint reads 0 where it sat at start-up. Start the robot in its zero pose.", "type": "boolean", "default": true },
+        "invert": { "label": "Invert Direction", "type": "boolean", "default": false }
+      }
+    },
+    {
+      "name": "gpio_servo",
+      "class": "gpio_motor_adapter.servo_adapter:GpioServoAdapter",
+      "iotype_compat": ["joint"],
+      "parameters": {
+        "signal_pin": { "label": "Signal Pin (BCM)", "description": "The Pi GPIO the servo's signal wire is on. Assigned by the deploy.", "type": "number", "min": 0, "max": 27, "required": true },
+        "pulse_min_us": { "label": "Pulse at Min Angle (µs)", "type": "number", "default": 500 },
+        "pulse_max_us": { "label": "Pulse at Max Angle (µs)", "type": "number", "default": 2500 },
+        "angle_min_rad": { "label": "Servo Min Angle (rad)", "type": "number", "default": -1.5708 },
+        "angle_max_rad": { "label": "Servo Max Angle (rad)", "type": "number", "default": 1.5708 },
+        "zero_rad": { "label": "Servo Angle at Joint Zero (rad)", "type": "number", "default": 0 },
+        "invert": { "label": "Invert Direction", "type": "boolean", "default": false }
+      }
+    }
+  ]
+}
