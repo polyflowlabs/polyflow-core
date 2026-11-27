@@ -7,6 +7,7 @@ find_package(builtin_interfaces REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/CameraFrame.msg"
+  "msg/DisplayCommand.msg"
   "msg/EncoderState.msg"
   "msg/GamepadAxes.msg"
   "msg/GamepadButtons.msg"

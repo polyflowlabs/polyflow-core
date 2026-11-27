@@ -1,0 +1,20 @@
+[project]
+name = "polyflow-oled-display-adapter"
+version = "0.1.0"
+description = "Polyflow hardware adapter for 128x64 I2C OLED screens (SH1106, SSD1306), drawing a robot's face."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Polyflow Robotics" }]
+
+dependencies = [
+    "polyflow-adapter-sdk>=0.1.0",
+    "smbus2>=0.4",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

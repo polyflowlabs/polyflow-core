@@ -1,0 +1,97 @@
+{
+  "type": "utility",
+  "name": "Face",
+  "entry_point": "face/node.py",
+  "topics": [
+    {
+      "name": "cmd_vel",
+      "direction": "subscribe",
+      "msg_type": "geometry_msgs/Twist",
+      "description": "What the robot is being told to drive (the Gamepad's cmd_vel). The eyes look into a turn, up going forward and down in reverse; no driving for a while and they get sleepy."
+    },
+    {
+      "name": "buttons",
+      "direction": "subscribe",
+      "msg_type": "polyflow_msgs/GamepadButtons",
+      "description": "Gamepad buttons, each flashing an expression: a happy, b surprised, x sad, y angry."
+    },
+    {
+      "name": "set_expression",
+      "direction": "subscribe",
+      "msg_type": "std_msgs/String",
+      "description": "A standing expression (neutral, happy, sad, angry, surprised, sleepy, off) that overrides the automatic one. An empty string hands it back."
+    },
+    {
+      "name": "expression",
+      "direction": "publish",
+      "msg_type": "std_msgs/String",
+      "description": "The expression being shown."
+    }
+  ],
+  "services": [],
+  "actions": [],
+  "parameters_schema": {
+    "display_id": {
+      "label": "Display",
+      "requiresInstance": true,
+      "type": "entity",
+      "required": true,
+      "description": "The screen on the robot (its placement) that shows the face. On the robot its adapter draws it; in Studio the simulator does.",
+      "entity_source": {
+        "selector": "parts",
+        "value_field": "_id",
+        "label_field": "_id"
+      },
+      "ui": {
+        "group": "Face",
+        "order": 1
+      }
+    },
+    "idle_after_s": {
+      "label": "Sleepy After",
+      "type": "number",
+      "units": "s",
+      "default": 8,
+      "description": "Seconds without driving before the face gets sleepy. 0 keeps it awake.",
+      "ui": {
+        "group": "Face",
+        "order": 2
+      }
+    },
+    "flash_s": {
+      "label": "Button Expression For",
+      "type": "number",
+      "units": "s",
+      "default": 2,
+      "description": "How long a button's expression shows.",
+      "ui": {
+        "group": "Face",
+        "order": 3
+      }
+    },
+    "look_gain": {
+      "label": "Look Into Turns",
+      "type": "number",
+      "default": 1,
+      "description": "How far the eyes follow a turn, 0 (not at all) to 1.",
+      "ui": {
+        "group": "Face",
+        "order": 4
+      }
+    },
+    "rate_hz": {
+      "label": "Update Rate",
+      "type": "number",
+      "units": "Hz",
+      "default": 10,
+      "description": "How often the face is re-evaluated (for going sleepy, and ending a button's expression).",
+      "ui": {
+        "group": "Face",
+        "order": 5
+      }
+    }
+  },
+  "defaults": {
+    "rate_hz": 10
+  }
+}
