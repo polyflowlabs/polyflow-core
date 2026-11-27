@@ -108,6 +108,7 @@ types dicts up into ROS messages.
 | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [Twist To Pose](utilities/twist_to_pose/README.md)         | Integrates a `Twist` into a running `Pose` so an operator can "fly" an end-effector with a stick. Has seed-pose anchoring, a deadman gate, and optional workspace clamps. |
 | [Bool From Gamepad](utilities/bool_from_gamepad/README.md) | Extracts one button from the Gamepad's `buttons` struct and republishes it as a plain `Bool` (e.g. a deadman for Twist To Pose).                                          |
+| [Gripper Command](utilities/gripper_command/README.md) | Turns a button into a gripper's open/closed position (read off the gripper joint's limits) for its Joint Controller; toggle or hold. |
 | [Logger](utilities/logger/README.md)                       | Captures every node's `self.log(...)` output from the runtime log topic and writes it to stdout and/or a file. No pin wiring needed.                                      |
 
 ## Messages
