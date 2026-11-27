@@ -165,14 +165,27 @@ class HiwonderRRC:
     # --- Connection lifecycle ---
 
     def open(self):
-        """Open the serial connection and start the receive thread."""
+        """Open the serial connection and start the receive thread.
+
+        DTR and RTS are cleared *before* the port is bound, which is why
+        this is a four-step dance rather than one constructor call. The
+        board supports one-click serial downloading, meaning DTR/RTS are
+        wired to the STM32's NRST and BOOT0 lines. pyserial asserts both
+        by default when the constructor is given a port, which holds the
+        MCU in reset (or drops it into the ROM bootloader) the instant we
+        connect: the port opens cleanly, and the board is then silent and
+        deaf to every command. Constructing unbound, clearing the lines,
+        then binding and opening avoids the glitch entirely. The vendor
+        SDK does the same thing for the same reason.
+        """
         if self._serial is not None and self._serial.is_open:
             return
-        self._serial = serial.Serial(
-            port=self._port_path,
-            baudrate=self._baudrate,
-            timeout=self._timeout,
-        )
+        ser = serial.Serial(None, self._baudrate, timeout=self._timeout)
+        ser.rts = False
+        ser.dtr = False
+        ser.port = self._port_path
+        ser.open()
+        self._serial = ser
         self._rx_running = True
         self._rx_thread = threading.Thread(target=self._recv_loop, daemon=True)
         self._rx_thread.start()
