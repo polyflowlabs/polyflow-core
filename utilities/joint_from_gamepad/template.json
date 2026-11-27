@@ -1,0 +1,100 @@
+{
+  "type": "utility",
+  "name": "Joint From Gamepad",
+  "entry_point": "joint_from_gamepad/node.py",
+  "topics": [
+    {
+      "name": "axes",
+      "direction": "subscribe",
+      "msg_type": "polyflow_msgs/GamepadAxes",
+      "description": "The Gamepad's sticks. The chosen axis is a speed: hold it and the joint turns, let go and it stops."
+    },
+    {
+      "name": "joint_state",
+      "direction": "subscribe",
+      "msg_type": "sensor_msgs/JointState",
+      "description": "The joint's real position: wire the joint's Joint Controller state here, so each push starts from where the joint is."
+    },
+    {
+      "name": "trajectory",
+      "direction": "publish",
+      "msg_type": "trajectory_msgs/JointTrajectoryPoint",
+      "description": "The joint's target position, sent only while the stick is pushed. Wire into the joint's Joint Controller trajectory."
+    }
+  ],
+  "services": [],
+  "actions": [],
+  "parameters_schema": {
+    "joint_id": {
+      "label": "Joint",
+      "requiresInstance": true,
+      "type": "entity",
+      "required": true,
+      "description": "The joint the stick moves (a pan, a tilt, a turret, a lift). The trajectory is addressed to it.",
+      "entity_source": { "selector": "joints", "value_field": "_id", "label_field": "name" },
+      "ui": { "group": "Joint", "order": 1 }
+    },
+    "axis": {
+      "label": "Stick Axis",
+      "type": "string",
+      "default": "left_x",
+      "allowed_values": ["left_x", "left_y", "right_x", "right_y"],
+      "description": "Which stick axis moves the joint. Right and up are positive.",
+      "ui": { "group": "Stick", "order": 1 }
+    },
+    "speed": {
+      "label": "Speed",
+      "type": "number",
+      "units": "rad/s",
+      "default": 1.0,
+      "description": "How fast the joint moves at full stick.",
+      "ui": { "group": "Stick", "order": 2 }
+    },
+    "invert": {
+      "label": "Invert",
+      "type": "boolean",
+      "default": false,
+      "description": "Reverse the direction, for a joint whose positive rotation goes the other way from the stick.",
+      "ui": { "group": "Stick", "order": 3 }
+    },
+    "min_position": {
+      "label": "Min. Position",
+      "type": "number",
+      "units": "rad",
+      "source": "entity_property",
+      "editable": false,
+      "binding": { "from_param": "joint_id", "field_path": "specs.lower_position.value" },
+      "description": "The joint's lower travel limit; the target never goes past it.",
+      "ui": { "group": "Limits", "order": 1 }
+    },
+    "max_position": {
+      "label": "Max. Position",
+      "type": "number",
+      "units": "rad",
+      "source": "entity_property",
+      "editable": false,
+      "binding": { "from_param": "joint_id", "field_path": "specs.upper_position.value" },
+      "description": "The joint's upper travel limit; the target never goes past it.",
+      "ui": { "group": "Limits", "order": 2 }
+    },
+    "max_lead": {
+      "label": "Max. Lead",
+      "type": "number",
+      "units": "rad",
+      "default": 0.25,
+      "description": "How far the target may run ahead of the joint's real position, so a joint that lags stops soon after the stick is released. 0 = no limit.",
+      "ui": { "group": "Limits", "order": 3 }
+    },
+    "rate_hz": {
+      "label": "Integration Rate",
+      "type": "number",
+      "units": "Hz",
+      "default": 50,
+      "description": "How often the stick is integrated into a new target.",
+      "ui": { "group": "Stick", "order": 4 }
+    }
+  },
+  "defaults": {
+    "rate_hz": 50
+  }
+}
