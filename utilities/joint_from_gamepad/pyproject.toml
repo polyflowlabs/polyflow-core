@@ -1,0 +1,26 @@
+[project]
+name = "joint_from_gamepad"
+version = "0.1.0"
+description = "Polyflow utility node — moves one joint from a gamepad stick"
+license = "MIT"
+authors = [
+    {name = "Drew Swinney", email = "drew@polyflowrobotics.com"},
+]
+maintainers = [
+    {name = "Drew Swinney", email = "drew@polyflowrobotics.com"},
+]
+dependencies = ["setuptools"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools.data-files]
+"share/ament_index/resource_index/packages" = ["resource/joint_from_gamepad"]
+"share/joint_from_gamepad" = ["package.xml"]
+
+[project.scripts]
+joint_from_gamepad_node = "joint_from_gamepad.node:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
