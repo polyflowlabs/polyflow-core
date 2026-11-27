@@ -140,5 +140,7 @@ speak `JointCommand`/`MotorCommand`, the same generic node works with either.
 - [polyflow_adapter_sdk](adapters/polyflow_adapter_sdk/README.md) — base classes
   and helpers (`HardwareAdapter`) for writing adapters.
 - [odrive](adapters/odrive/README.md) — ODrive S1 controllers over CAN or USB.
+- [mks_servo](adapters/mks_servo/README.md) — Makerbase MKS SERVO42D / 57D / 28D
+  closed-loop steppers over CAN (the joint bus in Polyflow's enclosed arms).
 - [hiwonder_rrc](adapters/hiwonder_rrc/README.md) — Hiwonder RRC Lite board
   (motors, PWM/bus servos, IMU, battery) over USB serial.
