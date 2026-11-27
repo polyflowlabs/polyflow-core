@@ -62,6 +62,11 @@ class StepPlanner:
         self.target = None
         self.target_velocity = max(-self.max_speed, min(self.max_speed, float(steps_per_s)))
 
+    def defer(self, steps: int) -> None:
+        """Take back steps `tick` returned that couldn't be sent yet; the next tick sends them."""
+        self.position -= steps
+        self._carry += steps
+
     def halt(self) -> None:
         """Stop now, where we are (no deceleration — this is the e-stop)."""
         self.velocity = 0.0
@@ -214,6 +219,12 @@ class StepStickAdapter(HardwareAdapter):
             return 0
         level = 1 if steps * self.sign > 0 else 0
         try:
+            # lgpio plays pulse trains one after another. Flipping DIR while the last tick's train is still
+            # playing would turn its remaining pulses the new way, and the count would drift a step or two per
+            # reversal. So a reversal waits a tick for the queue to drain.
+            if self._dir_level is not None and level != self._dir_level and self._gpio.busy(self.step_pin):
+                self.planner.defer(steps)
+                return 0
             if level != self._dir_level:
                 self._gpio.write(self.dir_pin, level)
                 self._dir_level = level

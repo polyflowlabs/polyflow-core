@@ -29,6 +29,7 @@ class FakeGpio:
         self.owners, self.level, self.duty, self.servo_us = {}, {}, {}, {}
         self.trains = []  # (pin, frequency, count)
         self.stopped = []
+        self.playing = set()  # pins whose last train hasn't finished (tests set it)
 
     def claim_output(self, pin, owner, level=0):
         if pin in self.owners and self.owners[pin] != owner:
@@ -48,6 +49,9 @@ class FakeGpio:
 
     def pulses(self, pin, frequency_hz, count):
         self.trains.append((pin, frequency_hz, count))
+
+    def busy(self, pin):
+        return pin in self.playing
 
     def stop(self, pin):
         self.stopped.append(pin)
@@ -254,6 +258,22 @@ class StepStickTest(unittest.TestCase):
         self.drive(s, 3)
         self.assertEqual(g.level[27], 0)
         self.assertAlmostEqual(s.position_rad, -0.5, places=3)
+
+    def test_a_reversal_waits_for_the_last_train_to_finish(self):
+        s, g, _ = make(StepStickAdapter, ST)
+        s.on_command("JointCommand", {"mode": JOINT_MODE_POSITION, "has_position": True, "position": 0.2})
+        self.drive(s, 2)
+        s.on_command("JointCommand", {"mode": JOINT_MODE_POSITION, "has_position": True, "position": 0.0})
+        g.playing.add(17)  # the forward train is still going out
+        sent = len(g.trains)
+        for _ in range(3):
+            self.assertEqual(s.step(0.01), 0)
+        self.assertEqual((len(g.trains), g.level[27]), (sent, 1))  # nothing sent, DIR untouched
+        g.playing.clear()
+        self.drive(s, 2)
+        self.assertEqual(g.level[27], 0)
+        self.assertEqual(s.planner.position, 0)
+        self.assertEqual(sum(c for p, _, c in g.trains if p == 17), 2 * round(0.2 * 200 * 16 * 5 / (2 * math.pi)))
 
     def test_invert_flips_dir_not_the_count(self):
         s, g, _ = make(StepStickAdapter, {**ST, "invert": True})

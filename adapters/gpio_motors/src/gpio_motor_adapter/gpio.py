@@ -32,6 +32,9 @@ class GpioBackend(Protocol):
     def pulses(self, pin: int, frequency_hz: float, count: int) -> None:
         """Queue `count` square pulses at `frequency_hz` after any already queued on the pin."""
 
+    def busy(self, pin: int) -> bool:
+        """Whether a pulse train is still playing (or queued) on the pin."""
+
     def stop(self, pin: int) -> None:
         """Cancel PWM / servo pulses / queued pulse trains on the pin and leave it low."""
 
@@ -93,6 +96,9 @@ class LgpioBackend:
         on = max(2, int(period_us / 2))  # StepStick drivers want ≥1–2 µs high
         off = max(2, int(period_us) - on)
         self._lg.tx_pulse(self._handle, pin, on, off, 0, int(count))
+
+    def busy(self, pin: int) -> bool:
+        return self._lg.tx_busy(self._handle, pin, self._lg.TX_PWM) == 1
 
     def stop(self, pin: int) -> None:
         self._lg.tx_pwm(self._handle, pin, 0, 0)
