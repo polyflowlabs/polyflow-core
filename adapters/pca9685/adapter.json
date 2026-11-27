@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "name": "pca9685",
+  "parameters": {
+    "i2c_bus": {
+      "label": "I²C Bus",
+      "description": "The Linux I²C bus number (/dev/i2c-N). 1 on a Raspberry Pi's 40-pin header.",
+      "type": "number",
+      "default": 1
+    },
+    "address": {
+      "label": "I²C Address",
+      "description": "The chip's address: 0x40 unless its address jumpers are bridged.",
+      "type": "number",
+      "default": 64
+    },
+    "frequency_hz": {
+      "label": "PWM Frequency (Hz)",
+      "description": "Servo frame rate, chip-wide. 50 Hz suits analog servos; most digital servos take up to 330 Hz.",
+      "type": "number",
+      "default": 50,
+      "min": 24,
+      "max": 1526
+    }
+  },
+  "drivers": [
+    {
+      "name": "pca9685_board",
+      "class": "pca9685_adapter.board_adapter:PCA9685BoardAdapter",
+      "parameters": {}
+    },
+    {
+      "name": "pca9685_servo",
+      "class": "pca9685_adapter.servo_adapter:PCA9685ServoAdapter",
+      "iotype_compat": ["joint"],
+      "host_hint": "pca9685_board",
+      "parameters": {
+        "channel": {
+          "label": "Channel",
+          "description": "The HAT's servo header the servo plugs into, 0–15. Derived from the wire to it.",
+          "type": "number",
+          "min": 0,
+          "max": 15,
+          "required": true
+        },
+        "pulse_min_us": { "label": "Pulse at Min Angle (µs)", "type": "number", "default": 500 },
+        "pulse_max_us": { "label": "Pulse at Max Angle (µs)", "type": "number", "default": 2500 },
+        "angle_min_rad": { "label": "Servo Min Angle (rad)", "type": "number", "default": -1.5708 },
+        "angle_max_rad": { "label": "Servo Max Angle (rad)", "type": "number", "default": 1.5708 },
+        "zero_rad": {
+          "label": "Servo Angle at Joint Zero (rad)",
+          "description": "Where in its travel the servo sits when the joint reads 0.",
+          "type": "number",
+          "default": 0
+        },
+        "invert": { "label": "Invert Direction", "type": "boolean", "default": false }
+      }
+    }
+  ]
+}

@@ -142,5 +142,7 @@ speak `JointCommand`/`MotorCommand`, the same generic node works with either.
 - [odrive](adapters/odrive/README.md) — ODrive S1 controllers over CAN or USB.
 - [mks_servo](adapters/mks_servo/README.md) — Makerbase MKS SERVO42D / 57D / 28D
   closed-loop steppers over CAN (the joint bus in Polyflow's enclosed arms).
+- [pca9685](adapters/pca9685/README.md) — PCA9685 16-channel PWM servo HATs (hobby
+  servos as joints) over I²C.
 - [hiwonder_rrc](adapters/hiwonder_rrc/README.md) — Hiwonder RRC Lite board
   (motors, PWM/bus servos, IMU, battery) over USB serial.
